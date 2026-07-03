@@ -7,6 +7,7 @@ Desktop.ini
 .env
 .env.*
 !.env.example
+!.env.local.example
 *.local
 
 # IDE
@@ -32,12 +33,21 @@ artifacts/
 *.nupkg
 *.snupkg
 
-# Node.js
+# Node.js / Next.js
 node_modules/
 dist/
 build/
+.next/
+out/
 .npm
 *.tsbuildinfo
+
+# Java / Maven
+target/
+*.class
+*.jar
+!**/mvnw
+!**/.mvn/wrapper/maven-wrapper.jar
 
 # Python
 __pycache__/

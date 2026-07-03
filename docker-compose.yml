@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: echo-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: echo
+      POSTGRES_USER: echo
+      POSTGRES_PASSWORD: echo
+    volumes:
+      - echo-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  echo-postgres-data:
