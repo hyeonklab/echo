@@ -60,4 +60,11 @@ public class Room {
 		}
 	}
 
+	/**
+	 * 채팅방 이름을 변경한다.
+	 */
+	public void updateName(String name) {
+		this.name = name;
+	}
+
 }

@@ -49,6 +49,7 @@ public class SecurityConfig {
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(
 					"/api/health",
+					"/ws/**",
 					"/oauth2/**",
 					"/login/oauth2/**",
 					"/error",

@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,6 +19,7 @@ import com.echo.dto.CreateDmRoomRequest;
 import com.echo.dto.CreateGroupRoomRequest;
 import com.echo.dto.InviteRoomMemberRequest;
 import com.echo.dto.RoomResponse;
+import com.echo.dto.UpdateRoomNameRequest;
 import com.echo.security.UserPrincipal;
 import com.echo.service.RoomService;
 
@@ -85,6 +87,18 @@ public class RoomController {
 		@Valid @RequestBody InviteRoomMemberRequest request
 	) {
 		return executeRoomAction(() -> roomService.inviteMember(roomId, requireUserId(principal), request));
+	}
+
+	/**
+	 * 채팅방 이름을 변경한다.
+	 */
+	@PatchMapping("/{roomId}/name")
+	public RoomResponse updateRoomName(
+		@AuthenticationPrincipal UserPrincipal principal,
+		@PathVariable Long roomId,
+		@Valid @RequestBody UpdateRoomNameRequest request
+	) {
+		return executeRoomAction(() -> roomService.updateRoomName(roomId, requireUserId(principal), request));
 	}
 
 	/**

@@ -20,6 +20,37 @@ export type Room = {
 };
 
 /**
+ * 요청 사용자 기준 채팅방 표시 이름을 반환한다.
+ */
+export function getRoomDisplayName(room: Room, currentUserId: number): string {
+  if (room.type !== "DM") {
+    return room.name;
+  }
+
+  const otherMember = room.members.find((member) => member.userId !== currentUserId);
+
+  if (!otherMember) {
+    return room.name;
+  }
+
+  return otherMember.displayName;
+}
+
+/**
+ * 그룹 채팅방 멤버 초대 가능 여부를 반환한다.
+ */
+export function canInviteToRoom(type: RoomType): boolean {
+  return type === "GROUP";
+}
+
+/**
+ * 채팅방 이름 변경 가능 여부를 반환한다.
+ */
+export function canRenameRoom(type: RoomType): boolean {
+  return type === "GROUP" || type === "SELF";
+}
+
+/**
  * 채팅방 유형 라벨을 반환한다.
  */
 export function getRoomTypeLabel(type: RoomType): string {
@@ -127,13 +158,33 @@ export async function createGroupRoom(
  */
 async function readApiErrorMessage(response: Response): Promise<string | null> {
   try {
-    const body = (await response.json()) as { message?: string };
+    const body = (await response.json()) as {
+      message?: string;
+      detail?: string;
+      error?: string;
+    };
 
     if (body.message) {
       return body.message;
     }
+
+    if (body.detail) {
+      return body.detail;
+    }
+
+    if (body.error) {
+      return body.error;
+    }
   } catch {
     // ignore parse errors
+  }
+
+  if (response.status === 404) {
+    return "요청한 API를 찾을 수 없습니다. 서버를 재시작해 주세요.";
+  }
+
+  if (response.status === 403) {
+    return "권한이 없습니다.";
   }
 
   return null;
@@ -171,11 +222,14 @@ export async function createDmRoom(
 /**
  * 채팅방에 멤버를 초대한다.
  */
-export async function inviteRoomMember(roomId: number, userId: number): Promise<Room | null> {
+export async function inviteRoomMember(
+  roomId: number,
+  userId: number,
+): Promise<{ room: Room | null; errorMessage: string | null }> {
   const token = await resolveAccessToken();
 
   if (!token) {
-    return null;
+    return { room: null, errorMessage: "Authentication required" };
   }
 
   const response = await apiFetch(`${getApiUrl()}/api/rooms/${roomId}/members`, {
@@ -186,10 +240,43 @@ export async function inviteRoomMember(roomId: number, userId: number): Promise<
   });
 
   if (!response.ok) {
-    return null;
+    return { room: null, errorMessage: await readApiErrorMessage(response) };
   }
 
-  return response.json() as Promise<Room>;
+  return {
+    room: (await response.json()) as Room,
+    errorMessage: null,
+  };
+}
+
+/**
+ * 채팅방 이름을 변경한다.
+ */
+export async function updateRoomName(
+  roomId: number,
+  name: string,
+): Promise<{ room: Room | null; errorMessage: string | null }> {
+  const token = await resolveAccessToken();
+
+  if (!token) {
+    return { room: null, errorMessage: "Authentication required" };
+  }
+
+  const response = await apiFetch(`${getApiUrl()}/api/rooms/${roomId}/name`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify({ name }),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    return { room: null, errorMessage: await readApiErrorMessage(response) };
+  }
+
+  return {
+    room: (await response.json()) as Room,
+    errorMessage: null,
+  };
 }
 
 /**

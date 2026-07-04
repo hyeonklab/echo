@@ -15,6 +15,7 @@ import com.echo.dto.CreateDmRoomRequest;
 import com.echo.dto.CreateGroupRoomRequest;
 import com.echo.dto.InviteRoomMemberRequest;
 import com.echo.dto.RoomResponse;
+import com.echo.dto.UpdateRoomNameRequest;
 import com.echo.repository.RoomMemberRepository;
 import com.echo.repository.RoomRepository;
 
@@ -37,7 +38,7 @@ public class RoomService {
 	@Transactional(readOnly = true)
 	public List<RoomResponse> getRoomsForUser(Long userId) {
 		return roomRepository.findAllByMemberUserId(userId).stream()
-			.map(room -> toRoomResponse(room))
+			.map(room -> toRoomResponse(room, userId))
 			.toList();
 	}
 
@@ -48,7 +49,7 @@ public class RoomService {
 	public RoomResponse getRoom(Long roomId, Long userId) {
 		Room room = getRoomForMember(roomId, userId);
 
-		return toRoomResponse(room);
+		return toRoomResponse(room, userId);
 	}
 
 	/**
@@ -77,7 +78,7 @@ public class RoomService {
 			}
 		}
 
-		return toRoomResponse(room);
+		return toRoomResponse(room, userId);
 	}
 
 	/**
@@ -95,11 +96,11 @@ public class RoomService {
 		List<Room> existingRooms = roomRepository.findDmRoomsBetween(userId, request.targetUserId(), RoomType.DM);
 
 		if (!existingRooms.isEmpty()) {
-			return toRoomResponse(existingRooms.get(0));
+			return toRoomResponse(existingRooms.get(0), userId);
 		}
 
 		Room newRoom = Room.builder()
-			.name(targetUser.getDisplayName())
+			.name("DM")
 			.type(RoomType.DM)
 			.createdBy(currentUser)
 			.build();
@@ -108,7 +109,7 @@ public class RoomService {
 		addMember(room, currentUser);
 		addMember(room, targetUser);
 
-		return toRoomResponse(room);
+		return toRoomResponse(room, userId);
 	}
 
 	/**
@@ -120,7 +121,7 @@ public class RoomService {
 		List<Room> existingRooms = roomRepository.findSelfRoomByUserId(userId, RoomType.SELF);
 
 		if (!existingRooms.isEmpty()) {
-			return toRoomResponse(existingRooms.get(0));
+			return toRoomResponse(existingRooms.get(0), userId);
 		}
 
 		Room newRoom = Room.builder()
@@ -132,7 +133,7 @@ public class RoomService {
 
 		addMember(room, user);
 
-		return toRoomResponse(room);
+		return toRoomResponse(room, userId);
 	}
 
 	/**
@@ -153,7 +154,23 @@ public class RoomService {
 		User member = userService.getUser(request.userId());
 		addMember(room, member);
 
-		return toRoomResponse(room);
+		return toRoomResponse(room, requesterUserId);
+	}
+
+	/**
+	 * 채팅방 이름을 변경한다.
+	 */
+	@Transactional
+	public RoomResponse updateRoomName(Long roomId, Long userId, UpdateRoomNameRequest request) {
+		Room room = getRoomForMember(roomId, userId);
+
+		if (room.getType() == RoomType.DM) {
+			throw new IllegalArgumentException("Cannot rename a DM room");
+		}
+
+		room.updateName(request.name().trim());
+
+		return toRoomResponse(room, userId);
 	}
 
 	/**
@@ -196,10 +213,10 @@ public class RoomService {
 		roomMemberRepository.save(Objects.requireNonNull(newMember));
 	}
 
-	private RoomResponse toRoomResponse(Room room) {
+	private RoomResponse toRoomResponse(Room room, Long viewerUserId) {
 		List<RoomMember> members = roomMemberRepository.findAllByRoom_IdOrderByJoinedAtAsc(room.getId());
 
-		return RoomResponse.from(room, members);
+		return RoomResponse.from(room, members, viewerUserId);
 	}
 
 }

@@ -36,6 +36,7 @@ public class MessageService {
 	private final RoomRepository roomRepository;
 	private final RoomMemberRepository roomMemberRepository;
 	private final UserService userService;
+	private final MessageBroadcastService messageBroadcastService;
 
 	/**
 	 * 채팅방 메시지 히스토리를 반환한다.
@@ -79,8 +80,11 @@ public class MessageService {
 			.content(request.content().trim())
 			.build();
 		Message message = messageRepository.save(Objects.requireNonNull(newMessage));
+		MessageResponse response = MessageResponse.from(message);
 
-		return MessageResponse.from(message);
+		messageBroadcastService.broadcastMessage(response);
+
+		return response;
 	}
 
 	private Room verifyRoomMember(Long roomId, Long userId) {

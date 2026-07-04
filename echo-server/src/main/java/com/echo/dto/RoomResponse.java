@@ -20,9 +20,9 @@ public record RoomResponse(
 ) {
 
 	/**
-	 * Room 엔티티와 멤버 목록을 응답 DTO로 변환한다.
+	 * Room 엔티티와 멤버 목록을 요청 사용자 기준 응답 DTO로 변환한다.
 	 */
-	public static RoomResponse from(Room room, List<RoomMember> members) {
+	public static RoomResponse from(Room room, List<RoomMember> members, Long viewerUserId) {
 		List<RoomMemberResponse> memberResponses = members.stream()
 			.map(member -> new RoomMemberResponse(
 				member.getUser().getId(),
@@ -34,12 +34,24 @@ public record RoomResponse(
 
 		return new RoomResponse(
 			room.getId(),
-			room.getName(),
+			resolveDisplayName(room, members, viewerUserId),
 			room.getType(),
 			room.getCreatedBy().getId(),
 			room.getCreatedAt(),
 			memberResponses
 		);
+	}
+
+	private static String resolveDisplayName(Room room, List<RoomMember> members, Long viewerUserId) {
+		if (room.getType() != RoomType.DM) {
+			return room.getName();
+		}
+
+		return members.stream()
+			.filter(member -> !member.getUser().getId().equals(viewerUserId))
+			.findFirst()
+			.map(member -> member.getUser().getDisplayName())
+			.orElse(room.getName());
 	}
 
 }

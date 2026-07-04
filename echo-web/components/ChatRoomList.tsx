@@ -12,6 +12,7 @@ import {
   deleteRoom,
   fetchRooms,
   getRoomTypeLabel,
+  getRoomDisplayName,
 } from "@/lib/rooms";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
 
@@ -210,7 +211,9 @@ export default function ChatRoomList() {
               채팅방 삭제
             </h3>
             <p id="delete-room-description" className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">{pendingDeleteRoom.name}</span>
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                {currentUser ? getRoomDisplayName(pendingDeleteRoom, currentUser.id) : pendingDeleteRoom.name}
+              </span>
               {" "}채팅방을 삭제하시겠습니까?
             </p>
             <p className="mt-1 text-xs text-zinc-500">삭제 후에는 목록에서 제거됩니다.</p>
@@ -341,7 +344,7 @@ export default function ChatRoomList() {
                       href={`/chat/${room.id}`}
                       className="font-medium text-zinc-900 transition hover:text-zinc-600 dark:text-zinc-100 dark:hover:text-zinc-300"
                     >
-                      {room.name}
+                      {currentUser ? getRoomDisplayName(room, currentUser.id) : room.name}
                     </Link>
                     <p className="mt-1 text-xs text-zinc-500">{getRoomTypeLabel(room.type)}</p>
                   </div>

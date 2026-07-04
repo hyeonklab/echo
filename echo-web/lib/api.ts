@@ -17,6 +17,13 @@ export function getApiUrl(): string {
 }
 
 /**
+ * STOMP WebSocket URL을 반환한다.
+ */
+export function getWsUrl(): string {
+  return `${getApiUrl().replace(/^http/, "ws")}/ws`;
+}
+
+/**
  * 타임아웃이 적용된 fetch를 실행한다.
  */
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
