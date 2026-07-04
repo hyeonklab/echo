@@ -7,6 +7,7 @@ export type Friend = {
   displayName: string;
   provider: "LOCAL" | "GOOGLE" | "NAVER";
   addedAt: string;
+  online: boolean;
 };
 
 /**
@@ -15,6 +16,7 @@ export type Friend = {
 function authHeaders(token: string): HeadersInit {
   return {
     Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
   };
 }
 

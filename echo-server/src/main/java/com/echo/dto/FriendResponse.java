@@ -12,19 +12,21 @@ public record FriendResponse(
 	String email,
 	String displayName,
 	String provider,
-	Instant addedAt
+	Instant addedAt,
+	boolean online
 ) {
 
 	/**
 	 * Friend 엔티티를 응답 DTO로 변환한다.
 	 */
-	public static FriendResponse from(Friend friend) {
+	public static FriendResponse from(Friend friend, boolean online) {
 		return new FriendResponse(
 			friend.getFriend().getId(),
 			friend.getFriend().getEmail(),
 			friend.getFriend().getDisplayName(),
 			friend.getFriend().getProvider().name(),
-			friend.getCreatedAt()
+			friend.getCreatedAt(),
+			online
 		);
 	}
 

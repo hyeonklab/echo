@@ -34,6 +34,7 @@ public class JwtStompChannelInterceptor implements ChannelInterceptor {
 	private static final String AUTHORIZATION_HEADER = "Authorization";
 	private static final String BEARER_PREFIX = "Bearer ";
 	private static final Pattern ROOM_TOPIC_PATTERN = Pattern.compile("^/topic/rooms/(\\d+)/(messages|read)$");
+	private static final String PRESENCE_TOPIC = "/topic/presence";
 
 	private final JwtTokenProvider jwtTokenProvider;
 	private final UserRepository userRepository;
@@ -87,7 +88,13 @@ public class JwtStompChannelInterceptor implements ChannelInterceptor {
 			throw new AccessDeniedException("Authentication required");
 		}
 
-		Long roomId = parseRoomTopicRoomId(accessor.getDestination());
+		String destination = accessor.getDestination();
+
+		if (PRESENCE_TOPIC.equals(destination)) {
+			return;
+		}
+
+		Long roomId = parseRoomTopicRoomId(destination);
 
 		if (roomId == null) {
 			return;

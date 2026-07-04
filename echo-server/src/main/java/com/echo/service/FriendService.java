@@ -24,6 +24,7 @@ public class FriendService {
 
 	private final FriendRepository friendRepository;
 	private final UserService userService;
+	private final PresenceService presenceService;
 
 	/**
 	 * 내 친구 목록을 반환한다.
@@ -31,7 +32,7 @@ public class FriendService {
 	@Transactional(readOnly = true)
 	public List<FriendResponse> getFriends(Long ownerUserId) {
 		return friendRepository.findByOwnerIdOrderByCreatedAtDesc(ownerUserId).stream()
-			.map(FriendResponse::from)
+			.map(friend -> FriendResponse.from(friend, presenceService.isOnline(friend.getFriend().getId())))
 			.toList();
 	}
 
@@ -57,7 +58,7 @@ public class FriendService {
 				.build()
 		);
 
-		return FriendResponse.from(savedFriend);
+		return FriendResponse.from(savedFriend, presenceService.isOnline(targetUserId));
 	}
 
 	/**

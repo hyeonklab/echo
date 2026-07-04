@@ -452,13 +452,6 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
     <div className="flex h-[70vh] min-h-[32rem] flex-col">
       <div className="flex items-start justify-between gap-4 border-b border-zinc-200 pb-4 dark:border-zinc-700">
         <div className="min-w-0 flex-1">
-          <Link
-            href="/chat"
-            className="text-xs font-medium text-zinc-500 transition hover:text-zinc-700 dark:hover:text-zinc-300"
-          >
-            ← 채팅방 목록
-          </Link>
-
           {isRenaming ? (
             <form className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center" onSubmit={handleSaveRename}>
               <input

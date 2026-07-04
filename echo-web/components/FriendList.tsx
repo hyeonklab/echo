@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type SubmitEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import OnlineStatusDot from "@/components/OnlineStatusDot";
 import { fetchSessionUser } from "@/lib/auth";
 import {
   Friend,
@@ -13,6 +14,12 @@ import {
   removeFriend,
   resolveAddFriendErrorMessage,
 } from "@/lib/friends";
+import {
+  applyPresenceUpdate,
+  getOnlineStatusLabel,
+  subscribePresenceSnapshots,
+  subscribePresenceUpdates,
+} from "@/lib/presence";
 import { createDmRoom } from "@/lib/rooms";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
 
@@ -44,8 +51,13 @@ export default function FriendList() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pendingDeleteFriend, setPendingDeleteFriend] = useState<Friend | null>(null);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<number>>(new Set());
 
   const friendIdSet = useMemo(() => new Set(friends.map((friend) => friend.id)), [friends]);
+  const onlineFriendCount = useMemo(
+    () => friends.filter((friend) => onlineUserIds.has(friend.id)).length,
+    [friends, onlineUserIds],
+  );
 
   useEffect(() => {
     async function loadFriends() {
@@ -59,11 +71,27 @@ export default function FriendList() {
       const friendList = await fetchFriends();
 
       setFriends(friendList);
+      setOnlineUserIds(new Set(friendList.filter((friend) => friend.online).map((friend) => friend.id)));
       setLoading(false);
     }
 
     loadFriends();
   }, [router]);
+
+  useEffect(() => {
+    const unsubscribeSnapshot = subscribePresenceSnapshots((snapshot) => {
+      setOnlineUserIds(snapshot);
+    });
+
+    const unsubscribeUpdate = subscribePresenceUpdates((update) => {
+      setOnlineUserIds((prev) => applyPresenceUpdate(prev, update));
+    });
+
+    return () => {
+      unsubscribeSnapshot();
+      unsubscribeUpdate();
+    };
+  }, []);
 
   async function handleSearchUsers(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -199,20 +227,32 @@ export default function FriendList() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">내 친구 ({friends.length})</h2>
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+          내 친구 ({friends.length}) · 온라인 {onlineFriendCount}
+        </h2>
 
         {friends.length === 0 ? (
           <p className="text-sm text-zinc-500">아직 등록된 친구가 없습니다.</p>
         ) : (
           <ul className="space-y-2">
-            {friends.map((friend) => (
+            {friends.map((friend) => {
+              const isOnline = onlineUserIds.has(friend.id);
+
+              return (
               <li
                 key={friend.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">{friend.displayName}</p>
+                  <p className="flex items-center gap-2 truncate font-medium text-zinc-900 dark:text-zinc-100">
+                    <OnlineStatusDot online={isOnline} />
+                    <span className="truncate">{friend.displayName}</span>
+                  </p>
                   <p className="truncate text-xs text-zinc-500">
+                    <span className={isOnline ? "text-emerald-600 dark:text-emerald-400" : ""}>
+                      {getOnlineStatusLabel(isOnline)}
+                    </span>
+                    {" · "}
                     {friend.email ?? "이메일 없음"} · {getProviderLabel(friend.provider)} · 추가{" "}
                     {formatFriendAddedAt(friend.addedAt)}
                   </p>
@@ -236,7 +276,8 @@ export default function FriendList() {
                   </button>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>
@@ -270,12 +311,6 @@ export default function FriendList() {
       ) : null}
 
       <div className="flex flex-wrap gap-3">
-        <Link
-          href="/chat"
-          className="inline-flex items-center justify-center rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
-        >
-          채팅방으로
-        </Link>
         <Link
           href="/"
           className="inline-flex items-center justify-center rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
