@@ -13,6 +13,7 @@ import {
   fetchRooms,
   getRoomTypeLabel,
 } from "@/lib/rooms";
+import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
 
 /**
  * DM 생성 API 오류 메시지를 사용자 메시지로 변환한다.
@@ -38,6 +39,9 @@ export default function ChatRoomList() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [groupName, setGroupName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [searching, setSearching] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pendingDeleteRoom, setPendingDeleteRoom] = useState<Room | null>(null);
@@ -93,6 +97,47 @@ export default function ChatRoomList() {
     setErrorMessage(null);
 
     const { room, errorMessage } = await createDmRoom(currentUser.id);
+
+    if (!room) {
+      setErrorMessage(resolveDmErrorMessage(errorMessage));
+      setSubmitting(false);
+      return;
+    }
+
+    setRooms((prev) => [room, ...prev.filter((item) => item.id !== room.id)]);
+    setSubmitting(false);
+    router.push(`/chat/${room.id}`);
+  }
+
+  async function handleSearchUsers(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const trimmed = searchQuery.trim();
+
+    if (trimmed.length < 2) {
+      setErrorMessage("검색어는 2자 이상 입력해 주세요.");
+      return;
+    }
+
+    setSearching(true);
+    setErrorMessage(null);
+    setSearchResults([]);
+
+    const results = await searchUsers(trimmed);
+
+    setSearchResults(results);
+    setSearching(false);
+
+    if (results.length === 0) {
+      setErrorMessage("검색 결과가 없습니다.");
+    }
+  }
+
+  async function handleStartDm(targetUser: SearchUser) {
+    setSubmitting(true);
+    setErrorMessage(null);
+
+    const { room, errorMessage } = await createDmRoom(targetUser.id);
 
     if (!room) {
       setErrorMessage(resolveDmErrorMessage(errorMessage));
@@ -216,6 +261,54 @@ export default function ChatRoomList() {
             생성
           </button>
         </form>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">1:1 대화 시작</h2>
+        <p className="text-sm text-zinc-500">이름 또는 이메일로 사용자를 검색해 DM을 시작하세요.</p>
+        <form className="flex flex-col gap-3 sm:flex-row" onSubmit={handleSearchUsers}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="이름 또는 이메일"
+            className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+            disabled={submitting || searching}
+          />
+          <button
+            type="submit"
+            disabled={submitting || searching || searchQuery.trim().length < 2}
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+          >
+            {searching ? "검색 중..." : "검색"}
+          </button>
+        </form>
+
+        {searchResults.length > 0 ? (
+          <ul className="space-y-2">
+            {searchResults.map((user) => (
+              <li
+                key={user.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/50"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">{user.displayName}</p>
+                  <p className="truncate text-xs text-zinc-500">
+                    {user.email ?? "이메일 없음"} · {getProviderLabel(user.provider)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleStartDm(user)}
+                  disabled={submitting}
+                  className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  대화 시작
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </section>
 
       <section className="space-y-4">
