@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { AuthUser, fetchSessionUser } from "@/lib/auth";
 import { Message, fetchMessages, sendMessage } from "@/lib/messages";
-import { Room, canInviteToRoom, canRenameRoom, fetchRoom, getRoomDisplayName, getRoomTypeLabel, inviteRoomMember, updateRoomName } from "@/lib/rooms";
+import { Room, canInviteToRoom, canRenameRoom, fetchRoom, formatRoomMemberSummary, getRoomDisplayName, inviteRoomMember, updateRoomName } from "@/lib/rooms";
 import { subscribeRoomMessages } from "@/lib/stomp";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
 
@@ -410,10 +410,7 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
             </div>
           )}
 
-          <p className="mt-1 text-xs text-zinc-500">
-            {getRoomTypeLabel(room.type)} · {room.members.length}명
-            {room.type === "GROUP" ? ` (${room.members.map((member) => member.displayName).join(", ")})` : ""}
-          </p>
+          <p className="mt-1 text-xs text-zinc-500">{formatRoomMemberSummary(room)}</p>
         </div>
       </div>
 

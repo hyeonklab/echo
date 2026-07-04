@@ -10,6 +10,13 @@ export type RoomMember = {
   provider: "LOCAL" | "GOOGLE" | "NAVER";
 };
 
+export type LastMessagePreview = {
+  senderId: number;
+  senderDisplayName: string;
+  content: string;
+  createdAt: string;
+};
+
 export type Room = {
   id: number;
   name: string;
@@ -17,7 +24,41 @@ export type Room = {
   createdByUserId: number;
   createdAt: string;
   members: RoomMember[];
+  lastMessage: LastMessagePreview | null;
 };
+
+/**
+ * 채팅방 목록용 마지막 메시지 미리보기 문구를 반환한다.
+ */
+export function formatLastMessagePreview(room: Room, currentUserId: number): string {
+  if (!room.lastMessage) {
+    return "메시지가 없습니다.";
+  }
+
+  const normalized = room.lastMessage.content.replace(/\s+/g, " ").trim();
+  const preview = normalized.length > 60 ? `${normalized.slice(0, 60)}...` : normalized;
+
+  if (room.type === "GROUP") {
+    const senderLabel =
+      room.lastMessage.senderId === currentUserId ? "나" : room.lastMessage.senderDisplayName;
+
+    return `${senderLabel}: ${preview}`;
+  }
+
+  return preview;
+}
+
+/**
+ * 마지막 메시지 시간을 목록 표시 형식으로 변환한다.
+ */
+export function formatLastMessageTime(value: string): string {
+  return new Date(value).toLocaleString("ko-KR", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 /**
  * 요청 사용자 기준 채팅방 표시 이름을 반환한다.
@@ -63,6 +104,19 @@ export function getRoomTypeLabel(type: RoomType): string {
   }
 
   return "그룹";
+}
+
+/**
+ * 채팅방 유형과 참여자 요약 정보를 반환한다.
+ */
+export function formatRoomMemberSummary(room: Room): string {
+  const summary = `${getRoomTypeLabel(room.type)} · ${room.members.length}명`;
+
+  if (room.type !== "GROUP") {
+    return summary;
+  }
+
+  return `${summary} (${room.members.map((member) => member.displayName).join(", ")})`;
 }
 
 /**

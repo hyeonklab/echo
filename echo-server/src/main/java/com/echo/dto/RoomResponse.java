@@ -16,13 +16,19 @@ public record RoomResponse(
 	RoomType type,
 	Long createdByUserId,
 	Instant createdAt,
-	List<RoomMemberResponse> members
+	List<RoomMemberResponse> members,
+	LastMessagePreview lastMessage
 ) {
 
 	/**
 	 * Room 엔티티와 멤버 목록을 요청 사용자 기준 응답 DTO로 변환한다.
 	 */
-	public static RoomResponse from(Room room, List<RoomMember> members, Long viewerUserId) {
+	public static RoomResponse from(
+		Room room,
+		List<RoomMember> members,
+		Long viewerUserId,
+		LastMessagePreview lastMessage
+	) {
 		List<RoomMemberResponse> memberResponses = members.stream()
 			.map(member -> new RoomMemberResponse(
 				member.getUser().getId(),
@@ -38,7 +44,8 @@ public record RoomResponse(
 			room.getType(),
 			room.getCreatedBy().getId(),
 			room.getCreatedAt(),
-			memberResponses
+			memberResponses,
+			lastMessage
 		);
 	}
 

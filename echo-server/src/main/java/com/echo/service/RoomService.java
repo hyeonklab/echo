@@ -2,11 +2,14 @@ package com.echo.service;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.echo.domain.Message;
 import com.echo.domain.Room;
 import com.echo.domain.RoomMember;
 import com.echo.domain.RoomType;
@@ -14,8 +17,10 @@ import com.echo.domain.User;
 import com.echo.dto.CreateDmRoomRequest;
 import com.echo.dto.CreateGroupRoomRequest;
 import com.echo.dto.InviteRoomMemberRequest;
+import com.echo.dto.LastMessagePreview;
 import com.echo.dto.RoomResponse;
 import com.echo.dto.UpdateRoomNameRequest;
+import com.echo.repository.MessageRepository;
 import com.echo.repository.RoomMemberRepository;
 import com.echo.repository.RoomRepository;
 
@@ -30,6 +35,7 @@ public class RoomService {
 
 	private final RoomRepository roomRepository;
 	private final RoomMemberRepository roomMemberRepository;
+	private final MessageRepository messageRepository;
 	private final UserService userService;
 
 	/**
@@ -37,8 +43,19 @@ public class RoomService {
 	 */
 	@Transactional(readOnly = true)
 	public List<RoomResponse> getRoomsForUser(Long userId) {
-		return roomRepository.findAllByMemberUserId(userId).stream()
-			.map(room -> toRoomResponse(room, userId))
+		List<Room> rooms = roomRepository.findAllByMemberUserId(userId);
+
+		if (rooms.isEmpty()) {
+			return List.of();
+		}
+
+		List<Long> roomIds = rooms.stream().map(Room::getId).toList();
+		Map<Long, Message> lastMessagesByRoomId = messageRepository.findLatestMessagesByRoomIds(roomIds).stream()
+			.collect(Collectors.toMap(message -> message.getRoom().getId(), message -> message));
+
+		return rooms.stream()
+			.map(room -> toRoomResponse(room, userId, lastMessagesByRoomId.get(room.getId())))
+			.sorted((left, right) -> compareByLastActivity(right, left))
 			.toList();
 	}
 
@@ -214,9 +231,34 @@ public class RoomService {
 	}
 
 	private RoomResponse toRoomResponse(Room room, Long viewerUserId) {
-		List<RoomMember> members = roomMemberRepository.findAllByRoom_IdOrderByJoinedAtAsc(room.getId());
+		return toRoomResponse(room, viewerUserId, findLastMessage(room.getId()));
+	}
 
-		return RoomResponse.from(room, members, viewerUserId);
+	private RoomResponse toRoomResponse(Room room, Long viewerUserId, Message lastMessage) {
+		List<RoomMember> members = roomMemberRepository.findAllByRoom_IdOrderByJoinedAtAsc(room.getId());
+		LastMessagePreview lastMessagePreview = lastMessage == null ? null : LastMessagePreview.from(lastMessage);
+
+		return RoomResponse.from(room, members, viewerUserId, lastMessagePreview);
+	}
+
+	private Message findLastMessage(Long roomId) {
+		return messageRepository.findTopByRoom_IdOrderByCreatedAtDesc(roomId).orElse(null);
+	}
+
+	private int compareByLastActivity(RoomResponse left, RoomResponse right) {
+		if (left.lastMessage() == null && right.lastMessage() == null) {
+			return left.createdAt().compareTo(right.createdAt());
+		}
+
+		if (left.lastMessage() == null) {
+			return -1;
+		}
+
+		if (right.lastMessage() == null) {
+			return 1;
+		}
+
+		return left.lastMessage().createdAt().compareTo(right.lastMessage().createdAt());
 	}
 
 }

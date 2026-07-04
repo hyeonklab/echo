@@ -11,7 +11,9 @@ import {
   createGroupRoom,
   deleteRoom,
   fetchRooms,
-  getRoomTypeLabel,
+  formatLastMessagePreview,
+  formatLastMessageTime,
+  formatRoomMemberSummary,
   getRoomDisplayName,
 } from "@/lib/rooms";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
@@ -339,17 +341,26 @@ export default function ChatRoomList() {
                 className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50"
               >
                 <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <Link
-                      href={`/chat/${room.id}`}
-                      className="font-medium text-zinc-900 transition hover:text-zinc-600 dark:text-zinc-100 dark:hover:text-zinc-300"
-                    >
-                      {currentUser ? getRoomDisplayName(room, currentUser.id) : room.name}
-                    </Link>
-                    <p className="mt-1 text-xs text-zinc-500">{getRoomTypeLabel(room.type)}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <Link
+                        href={`/chat/${room.id}`}
+                        className="truncate font-medium text-zinc-900 transition hover:text-zinc-600 dark:text-zinc-100 dark:hover:text-zinc-300"
+                      >
+                        {currentUser ? getRoomDisplayName(room, currentUser.id) : room.name}
+                      </Link>
+                      {room.lastMessage ? (
+                        <span className="shrink-0 text-[11px] text-zinc-400">
+                          {formatLastMessageTime(room.lastMessage.createdAt)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 truncate text-xs text-zinc-500">{formatRoomMemberSummary(room)}</p>
+                    <p className="mt-2 truncate text-sm text-zinc-600 dark:text-zinc-300">
+                      {currentUser ? formatLastMessagePreview(room, currentUser.id) : "메시지가 없습니다."}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-zinc-500">{room.members.length}명</span>
+                  <div className="flex shrink-0 items-center">
                     <button
                       type="button"
                       onClick={() => openDeleteConfirm(room)}
@@ -360,9 +371,6 @@ export default function ChatRoomList() {
                     </button>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-zinc-500">
-                  {room.members.map((member) => member.displayName).join(", ")}
-                </p>
               </li>
             ))}
           </ul>
