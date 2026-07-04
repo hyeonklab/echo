@@ -3,6 +3,7 @@ import type { LastMessagePreview, Room } from "@/lib/rooms";
 
 export const ROOM_MESSAGE_EVENT = "echo:room-message";
 export const ROOM_READ_EVENT = "echo:room-read";
+export const ROOM_UPDATE_EVENT = "echo:room-update";
 
 export type RoomReadEvent = {
   roomId: number;
@@ -97,6 +98,28 @@ export function applyRoomReadToRooms(
 }
 
 /**
+ * 채팅방 정보 변경으로 채팅방 목록을 갱신한다.
+ */
+export function applyRoomUpdateToRooms(rooms: Room[], updatedRoom: Room): Room[] {
+  const hasRoom = rooms.some((room) => room.id === updatedRoom.id);
+
+  if (!hasRoom) {
+    return rooms;
+  }
+
+  return rooms.map((room) => {
+    if (room.id !== updatedRoom.id) {
+      return room;
+    }
+
+    return {
+      ...room,
+      ...updatedRoom,
+    };
+  });
+}
+
+/**
  * 채팅방 메시지 수신 이벤트를 발행한다.
  */
 export function publishRoomMessageEvent(message: Message): void {
@@ -119,6 +142,19 @@ export function publishRoomReadEvent(read: RoomReadEvent): void {
 
   globalThis.window.dispatchEvent(
     new CustomEvent<RoomReadEvent>(ROOM_READ_EVENT, { detail: read }),
+  );
+}
+
+/**
+ * 채팅방 정보 변경 이벤트를 발행한다.
+ */
+export function publishRoomUpdateEvent(room: Room): void {
+  if (globalThis.window === undefined) {
+    return;
+  }
+
+  globalThis.window.dispatchEvent(
+    new CustomEvent<Room>(ROOM_UPDATE_EVENT, { detail: room }),
   );
 }
 
@@ -149,6 +185,21 @@ export function subscribeRoomReadEvents(handler: (read: RoomReadEvent) => void):
 
   return () => {
     globalThis.window.removeEventListener(ROOM_READ_EVENT, onRoomRead);
+  };
+}
+
+/**
+ * 채팅방 정보 변경 이벤트를 구독한다.
+ */
+export function subscribeRoomUpdateEvents(handler: (room: Room) => void): () => void {
+  function onRoomUpdate(event: Event) {
+    handler((event as CustomEvent<Room>).detail);
+  }
+
+  globalThis.window.addEventListener(ROOM_UPDATE_EVENT, onRoomUpdate);
+
+  return () => {
+    globalThis.window.removeEventListener(ROOM_UPDATE_EVENT, onRoomUpdate);
   };
 }
 

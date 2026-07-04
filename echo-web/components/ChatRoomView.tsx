@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { AuthUser, fetchSessionUser } from "@/lib/auth";
 import { Message, fetchMessages, sendMessage, type MemberReadState } from "@/lib/messages";
-import { formatUnreadCount, publishRoomReadEvent } from "@/lib/room-live";
+import { formatUnreadCount, publishRoomReadEvent, publishRoomUpdateEvent } from "@/lib/room-live";
 import { Room, canInviteToRoom, canRenameRoom, fetchRoom, formatRoomMemberSummary, getRoomDisplayName, inviteRoomMember, markRoomRead, updateRoomName } from "@/lib/rooms";
 import { subscribeRoomMessages, subscribeRoomRead } from "@/lib/stomp";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
@@ -334,6 +334,7 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
     }
 
     setRoom(updatedRoom);
+    publishRoomUpdateEvent(updatedRoom);
     setIsRenaming(false);
     setRenameInput("");
     setRenameErrorMessage(null);

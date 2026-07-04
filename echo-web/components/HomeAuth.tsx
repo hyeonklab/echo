@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import LoginPanel from "@/components/LoginPanel";
 import {
   AuthUser,
   fetchSessionUser,
@@ -49,37 +50,25 @@ export default function HomeAuth() {
   }
 
   if (!user) {
-    return (
-      <div className="mt-6 flex flex-col gap-3">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          로그인 후 채팅 기능을 사용할 수 있습니다.
-        </p>
-        <Link
-          href="/login"
-          className="inline-flex w-fit items-center justify-center rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-        >
-          로그인
-        </Link>
-      </div>
-    );
+    return <LoginPanel />;
   }
 
   return (
-    <div className="mt-6 space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-700 dark:bg-zinc-800/50">
+    <div className="mt-6 max-w-md space-y-4 rounded-xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-700 dark:bg-zinc-800/50">
       <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
         로그인됨
       </p>
-      <dl className="space-y-2 text-sm">
-        <div className="flex justify-between gap-4">
-          <dt className="text-zinc-500">이름</dt>
+      <dl className="space-y-2.5 text-sm">
+        <div className="flex items-center gap-4">
+          <dt className="w-14 shrink-0 text-zinc-500">이름</dt>
           <dd className="font-medium text-zinc-900 dark:text-zinc-100">{user.displayName}</dd>
         </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-zinc-500">이메일</dt>
-          <dd className="font-medium text-zinc-900 dark:text-zinc-100">{user.email ?? "-"}</dd>
+        <div className="flex items-center gap-4">
+          <dt className="w-14 shrink-0 text-zinc-500">이메일</dt>
+          <dd className="min-w-0 break-all font-medium text-zinc-900 dark:text-zinc-100">{user.email ?? "-"}</dd>
         </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-zinc-500">제공자</dt>
+        <div className="flex items-center gap-4">
+          <dt className="w-14 shrink-0 text-zinc-500">제공자</dt>
           <dd className="font-medium text-zinc-900 dark:text-zinc-100">{user.provider}</dd>
         </div>
       </dl>

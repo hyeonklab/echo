@@ -18,7 +18,7 @@ import {
 } from "@/lib/rooms";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
 import { addFriend, fetchFriends, resolveAddFriendErrorMessage } from "@/lib/friends";
-import { applyIncomingMessageToRooms, applyRoomReadToRooms, formatUnreadCount, getViewingRoomId, subscribeRoomMessageEvents, subscribeRoomReadEvents } from "@/lib/room-live";
+import { applyIncomingMessageToRooms, applyRoomReadToRooms, applyRoomUpdateToRooms, formatUnreadCount, getViewingRoomId, subscribeRoomMessageEvents, subscribeRoomReadEvents, subscribeRoomUpdateEvents } from "@/lib/room-live";
 import { getNotificationUnavailableReason } from "@/lib/notifications";
 
 /**
@@ -103,6 +103,12 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
       setRooms((prev) => applyRoomReadToRooms(prev, read, currentUser.id));
     });
   }, [currentUser]);
+
+  useEffect(() => {
+    return subscribeRoomUpdateEvents((updatedRoom) => {
+      setRooms((prev) => applyRoomUpdateToRooms(prev, updatedRoom));
+    });
+  }, []);
 
   async function handleCreateGroup(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -263,39 +269,70 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
         <ul className={isPanel ? "space-y-1" : "space-y-3"}>
           {rooms.map((room) => {
             const isActive = activeRoomId === room.id;
+            const displayName = currentUser ? getRoomDisplayName(room, currentUser.id) : room.name;
+
+            if (isPanel) {
+              return (
+                <li key={room.id}>
+                  <Link
+                    href={`/chat/${room.id}`}
+                    className={`block rounded-lg px-3 py-2 transition ${
+                      isActive
+                        ? "bg-zinc-100 dark:bg-zinc-800"
+                        : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="truncate font-medium text-zinc-900 dark:text-zinc-100">
+                            {displayName}
+                          </span>
+                          {room.lastMessage ? (
+                            <span className="shrink-0 text-[11px] text-zinc-400">
+                              {formatLastMessageTime(room.lastMessage.createdAt)}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-zinc-600 dark:text-zinc-300">
+                          {currentUser ? formatLastMessagePreview(room, currentUser.id) : "메시지가 없습니다."}
+                        </p>
+                      </div>
+                      {room.unreadCount > 0 ? (
+                        <span className="min-w-5 shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[11px] font-semibold text-white">
+                          {formatUnreadCount(room.unreadCount ?? 0)}
+                        </span>
+                      ) : null}
+                    </div>
+                  </Link>
+                </li>
+              );
+            }
 
             return (
               <li
                 key={room.id}
-                className={
-                  isPanel
-                    ? `rounded-lg px-3 py-2 transition ${
-                        isActive
-                          ? "bg-zinc-100 dark:bg-zinc-800"
-                          : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                      }`
-                    : "rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50"
-                }
+                className="relative rounded-xl border border-zinc-200 bg-zinc-50 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
               >
-                <div className="flex items-start justify-between gap-3">
+                <Link
+                  href={`/chat/${room.id}`}
+                  className="absolute inset-0 z-0 rounded-xl"
+                  aria-label={`${displayName} 채팅방 열기`}
+                />
+                <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3 p-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <Link
-                        href={`/chat/${room.id}`}
-                        className="truncate font-medium text-zinc-900 transition hover:text-zinc-600 dark:text-zinc-100 dark:hover:text-zinc-300"
-                      >
-                        {currentUser ? getRoomDisplayName(room, currentUser.id) : room.name}
-                      </Link>
+                      <span className="truncate font-medium text-zinc-900 dark:text-zinc-100">
+                        {displayName}
+                      </span>
                       {room.lastMessage ? (
                         <span className="shrink-0 text-[11px] text-zinc-400">
                           {formatLastMessageTime(room.lastMessage.createdAt)}
                         </span>
                       ) : null}
                     </div>
-                    {!isPanel ? (
-                      <p className="mt-1 truncate text-xs text-zinc-500">{formatRoomMemberSummary(room)}</p>
-                    ) : null}
-                    <p className={`truncate text-zinc-600 dark:text-zinc-300 ${isPanel ? "mt-0.5 text-xs" : "mt-2 text-sm"}`}>
+                    <p className="mt-1 truncate text-xs text-zinc-500">{formatRoomMemberSummary(room)}</p>
+                    <p className="mt-2 truncate text-sm text-zinc-600 dark:text-zinc-300">
                       {currentUser ? formatLastMessagePreview(room, currentUser.id) : "메시지가 없습니다."}
                     </p>
                   </div>
@@ -305,16 +342,14 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
                         {formatUnreadCount(room.unreadCount ?? 0)}
                       </span>
                     ) : null}
-                    {!isPanel ? (
-                      <button
-                        type="button"
-                        onClick={() => openDeleteConfirm(room)}
-                        disabled={submitting}
-                        className="rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
-                      >
-                        삭제
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => openDeleteConfirm(room)}
+                      disabled={submitting}
+                      className="pointer-events-auto rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                    >
+                      삭제
+                    </button>
                   </div>
                 </div>
               </li>
