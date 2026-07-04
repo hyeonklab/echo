@@ -1,4 +1,2 @@
-/**
- * 공용 UI 컴포넌트 (구현 예정).
- */
-export {};
+export { default as ChatRoomList } from "./ChatRoomList";
+export { default as HomeAuth } from "./HomeAuth";
