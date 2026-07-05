@@ -81,11 +81,10 @@ function formatMessageTime(value: string): string {
 }
 
 /**
- * 내가 보낸 마지막 메시지의 미읽음 인원 수를 반환한다.
+ * 내가 보낸 메시지별 미읽음 인원 수를 반환한다.
  */
 function getOwnMessageUnreadCount(
   message: Message,
-  messages: Message[],
   room: Room,
   currentUserId: number,
   peerLastReadMessageId: number | null,
@@ -95,20 +94,8 @@ function getOwnMessageUnreadCount(
     return null;
   }
 
-  const ownMessages = messages.filter((item) => item.senderId === currentUserId);
-
-  if (ownMessages.length === 0) {
-    return null;
-  }
-
-  const lastOwnMessage = ownMessages[ownMessages.length - 1];
-
-  if (message.id !== lastOwnMessage.id) {
-    return null;
-  }
-
   if (room.type === "DM") {
-    if (peerLastReadMessageId == null || lastOwnMessage.id > peerLastReadMessageId) {
+    if (peerLastReadMessageId == null || message.id > peerLastReadMessageId) {
       return "1";
     }
 
@@ -125,7 +112,7 @@ function getOwnMessageUnreadCount(
     const readState = memberReadStates.find((item) => item.userId === member.userId);
     const lastReadMessageId = readState?.lastReadMessageId ?? 0;
 
-    return lastReadMessageId < lastOwnMessage.id;
+    return lastReadMessageId < message.id;
   }).length;
 
   if (unreadCount === 0) {
@@ -638,7 +625,6 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
               const isMine = message.senderId === currentUser.id;
               const unreadCountLabel = getOwnMessageUnreadCount(
                 message,
-                messages,
                 room,
                 currentUser.id,
                 peerLastReadMessageId,
