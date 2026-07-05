@@ -2,11 +2,12 @@ import { Client, IMessage } from "@stomp/stompjs";
 
 import { getWsUrl } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
-import type { Message } from "@/lib/messages";
+import type { Message, MessageDeletedEvent } from "@/lib/messages";
 import type { RoomReadEvent } from "@/lib/room-live";
 import type { PresenceUpdate } from "@/lib/presence";
 
 export type RoomMessageHandler = (message: Message) => void;
+export type RoomMessageDeletedHandler = (deleted: MessageDeletedEvent) => void;
 export type RoomReadHandler = (read: RoomReadEvent) => void;
 export type RoomMetaHandler = (update: RoomMetaUpdate) => void;
 export type PresenceHandler = (update: PresenceUpdate) => void;
@@ -61,6 +62,59 @@ export function subscribeRoomsMessages(roomIds: number[], onMessage: RoomMessage
  */
 export function subscribeRoomMessages(roomId: number, onMessage: RoomMessageHandler): () => void {
   return subscribeRoomsMessages([roomId], onMessage);
+}
+
+/**
+ * 여러 채팅방 메시지 삭제 STOMP 구독을 시작한다.
+ */
+export function subscribeRoomsMessageDeletes(
+  roomIds: number[],
+  onDeleted: RoomMessageDeletedHandler,
+): () => void {
+  const uniqueRoomIds = [...new Set(roomIds)];
+
+  if (uniqueRoomIds.length === 0) {
+    return () => undefined;
+  }
+
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    return () => undefined;
+  }
+
+  const client = new Client({
+    brokerURL: getWsUrl(),
+    connectHeaders: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    reconnectDelay: 5000,
+    onConnect: () => {
+      for (const roomId of uniqueRoomIds) {
+        client.subscribe(`/topic/rooms/${roomId}/messages/deleted`, (frame: IMessage) => {
+          const deleted = JSON.parse(frame.body) as MessageDeletedEvent;
+
+          onDeleted(deleted);
+        });
+      }
+    },
+  });
+
+  client.activate();
+
+  return () => {
+    void client.deactivate();
+  };
+}
+
+/**
+ * 채팅방 메시지 삭제 STOMP 구독을 시작한다.
+ */
+export function subscribeRoomMessageDeletes(
+  roomId: number,
+  onDeleted: RoomMessageDeletedHandler,
+): () => void {
+  return subscribeRoomsMessageDeletes([roomId], onDeleted);
 }
 
 /**

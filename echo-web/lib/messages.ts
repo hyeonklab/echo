@@ -1,6 +1,13 @@
 import { ensureAccessToken } from "@/lib/auth";
 import { apiFetch, getApiUrl } from "@/lib/api";
 
+export type MessageDeleteScope = "me" | "all";
+
+export type MessageDeletedEvent = {
+  roomId: number;
+  messageId: number;
+};
+
 export type Message = {
   id: number;
   roomId: number;
@@ -100,4 +107,31 @@ export async function sendMessage(roomId: number, content: string): Promise<Mess
   }
 
   return response.json() as Promise<Message>;
+}
+
+/**
+ * 메시지를 삭제한다.
+ */
+export async function deleteMessage(
+  roomId: number,
+  messageId: number,
+  scope: MessageDeleteScope,
+): Promise<boolean> {
+  const token = await resolveAccessToken();
+
+  if (!token) {
+    return false;
+  }
+
+  const params = new URLSearchParams({ scope });
+  const response = await apiFetch(
+    `${getApiUrl()}/api/rooms/${roomId}/messages/${messageId}?${params.toString()}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(token),
+      cache: "no-store",
+    },
+  );
+
+  return response.ok;
 }

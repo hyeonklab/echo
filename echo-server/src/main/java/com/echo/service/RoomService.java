@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,7 +55,7 @@ public class RoomService {
 		List<Long> roomIds = rooms.stream()
 			.map(room -> Objects.requireNonNull(room).getId())
 			.toList();
-		Map<Long, Message> lastMessagesByRoomId = messageRepository.findLatestMessagesByRoomIds(roomIds).stream()
+		Map<Long, Message> lastMessagesByRoomId = messageRepository.findLatestVisibleMessagesByRoomIds(roomIds, userId).stream()
 			.collect(Collectors.toMap(message -> message.getRoom().getId(), message -> message));
 		Map<Long, Integer> unreadCountsByRoomId = roomReadStateService.countUnreadByRoomIds(userId, roomIds);
 
@@ -247,7 +248,7 @@ public class RoomService {
 		return toRoomResponse(
 			room,
 			viewerUserId,
-			findLastMessage(room.getId()),
+			findLastMessage(room.getId(), viewerUserId),
 			roomReadStateService.countUnread(room.getId(), viewerUserId)
 		);
 	}
@@ -259,8 +260,18 @@ public class RoomService {
 		return RoomResponse.from(room, members, viewerUserId, lastMessagePreview, unreadCount);
 	}
 
-	private Message findLastMessage(Long roomId) {
-		return messageRepository.findTopByRoom_IdOrderByCreatedAtDesc(roomId).orElse(null);
+	private Message findLastMessage(Long roomId, Long viewerUserId) {
+		List<Message> messages = messageRepository.findVisibleByRoom_IdAndUser_IdOrderByCreatedAtDesc(
+			roomId,
+			viewerUserId,
+			PageRequest.of(0, 1)
+		);
+
+		if (messages.isEmpty()) {
+			return null;
+		}
+
+		return messages.get(0);
 	}
 
 	private int compareByLastActivity(RoomResponse left, RoomResponse right) {

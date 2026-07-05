@@ -4,20 +4,53 @@ import Link from "next/link";
 
 import LinkPreviewCard from "@/components/LinkPreviewCard";
 import MessageContent from "@/components/MessageContent";
-import { type SubmitEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, type SubmitEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AuthUser, requireSessionUser } from "@/lib/auth";
 import { extractFirstUrl } from "@/lib/link-preview";
-import { Message, fetchMessages, sendMessage, type MemberReadState } from "@/lib/messages";
-import { formatUnreadCount, publishRoomReadEvent, publishRoomUpdateEvent, subscribeRoomUpdateEvents } from "@/lib/room-live";
+import {
+  Message,
+  type MessageDeleteScope,
+  deleteMessage,
+  fetchMessages,
+  sendMessage,
+  type MemberReadState,
+} from "@/lib/messages";
+import { formatUnreadCount, publishRoomMessageDeletedEvent, publishRoomReadEvent, publishRoomUpdateEvent, subscribeRoomUpdateEvents } from "@/lib/room-live";
 import { Room, canInviteToRoom, canRenameRoom, fetchRoom, formatRoomMemberSummary, getRoomDisplayName, inviteRoomMember, markRoomRead, updateRoomName } from "@/lib/rooms";
-import { subscribeRoomMessages, subscribeRoomRead } from "@/lib/stomp";
+import { subscribeRoomMessageDeletes, subscribeRoomMessages, subscribeRoomRead } from "@/lib/stomp";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
 
 type ChatRoomViewProps = {
   roomId: number;
 };
+
+type MessageContextMenuState = {
+  x: number;
+  y: number;
+  message: Message;
+};
+
+/**
+ * 삭제 확인용 메시지 미리보기를 반환한다.
+ */
+function formatDeletePreview(content: string, maxLength = 60): string {
+  const normalized = content.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength)}...`;
+}
+
+/**
+ * 메시지 목록에서 항목을 제거한다.
+ */
+function removeMessage(prev: Message[], messageId: number): Message[] {
+  return prev.filter((item) => item.id !== messageId);
+}
 
 /**
  * 중복 없이 메시지 목록에 항목을 추가한다.
@@ -151,6 +184,12 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
   const [inviteErrorMessage, setInviteErrorMessage] = useState<string | null>(null);
   const [peerLastReadMessageId, setPeerLastReadMessageId] = useState<number | null>(null);
   const [memberReadStates, setMemberReadStates] = useState<MemberReadState[]>([]);
+  const [messageMenu, setMessageMenu] = useState<MessageContextMenuState | null>(null);
+  const [pendingDeleteMessage, setPendingDeleteMessage] = useState<{
+    message: Message;
+    scope: MessageDeleteScope;
+  } | null>(null);
+  const [deletingMessageId, setDeletingMessageId] = useState<number | null>(null);
 
   useEffect(() => {
     lastMarkedMessageIdRef.current = null;
@@ -201,6 +240,61 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
       setMessages((prev) => appendMessage(prev, message));
     });
   }, [roomId, loading]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    return subscribeRoomMessageDeletes(roomId, (deleted) => {
+      setMessages((prev) => removeMessage(prev, deleted.messageId));
+      publishRoomMessageDeletedEvent(deleted);
+    });
+  }, [roomId, loading]);
+
+  useEffect(() => {
+    if (!messageMenu) {
+      return;
+    }
+
+    function closeMenu() {
+      setMessageMenu(null);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeMenu();
+      }
+    }
+
+    globalThis.window.addEventListener("click", closeMenu);
+    globalThis.window.addEventListener("scroll", closeMenu, true);
+    globalThis.window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      globalThis.window.removeEventListener("click", closeMenu);
+      globalThis.window.removeEventListener("scroll", closeMenu, true);
+      globalThis.window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [messageMenu]);
+
+  useEffect(() => {
+    if (!pendingDeleteMessage) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && deletingMessageId === null) {
+        setPendingDeleteMessage(null);
+      }
+    }
+
+    globalThis.window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      globalThis.window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [pendingDeleteMessage, deletingMessageId]);
 
   useEffect(() => {
     if (loading || !currentUser || messages.length === 0) {
@@ -410,6 +504,66 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
     setRoom(updatedRoom);
     setInviteResults((prev) => prev.filter((user) => user.id !== targetUser.id));
     setInviteSubmitting(false);
+  }
+
+  function handleOpenMessageMenu(event: MouseEvent<HTMLDivElement>, message: Message) {
+    event.preventDefault();
+
+    setMessageMenu({
+      x: event.clientX,
+      y: event.clientY,
+      message,
+    });
+  }
+
+  function handleRequestDeleteMessage(scope: MessageDeleteScope) {
+    if (!messageMenu) {
+      return;
+    }
+
+    setPendingDeleteMessage({
+      message: messageMenu.message,
+      scope,
+    });
+    setMessageMenu(null);
+  }
+
+  function handleCancelDeleteMessage() {
+    if (deletingMessageId !== null) {
+      return;
+    }
+
+    setPendingDeleteMessage(null);
+  }
+
+  async function handleConfirmDeleteMessage() {
+    if (!pendingDeleteMessage) {
+      return;
+    }
+
+    const { message: targetMessage, scope } = pendingDeleteMessage;
+
+    setDeletingMessageId(targetMessage.id);
+    setErrorMessage(null);
+
+    const success = await deleteMessage(roomId, targetMessage.id, scope);
+
+    setDeletingMessageId(null);
+
+    if (!success) {
+      setErrorMessage("메시지 삭제에 실패했습니다.");
+      return;
+    }
+
+    setPendingDeleteMessage(null);
+    setMessages((prev) => removeMessage(prev, targetMessage.id));
+
+    if (scope === "all") {
+      publishRoomMessageDeletedEvent({
+        roomId,
+        messageId: targetMessage.id,
+      });
+    }
   }
 
   function handleSendMessage(event: SubmitEvent<HTMLFormElement>) {
@@ -643,7 +797,8 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
                       isMine
                         ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
                         : "border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
-                    }`}
+                    } ${deletingMessageId === message.id ? "opacity-50" : ""}`}
+                    onContextMenu={(event) => handleOpenMessageMenu(event, message)}
                   >
                     {!isMine ? (
                       <p className="mb-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
@@ -694,6 +849,88 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
           </button>
         </form>
       </div>
+
+      {messageMenu ? (
+        <div
+          className="fixed z-50 min-w-[168px] overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-600 dark:bg-zinc-900"
+          style={{ left: messageMenu.x, top: messageMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button
+            type="button"
+            disabled={deletingMessageId === messageMenu.message.id}
+            onClick={() => handleRequestDeleteMessage("me")}
+            className="block w-full px-3 py-2 text-left text-sm text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            나에게만 삭제
+          </button>
+          {messageMenu.message.senderId === currentUser.id ? (
+            <button
+              type="button"
+              disabled={deletingMessageId === messageMenu.message.id}
+              onClick={() => handleRequestDeleteMessage("all")}
+              className="block w-full px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40"
+            >
+              모두에게서 삭제
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {pendingDeleteMessage ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="삭제 확인 닫기"
+            className="absolute inset-0 bg-black/50"
+            onClick={handleCancelDeleteMessage}
+            disabled={deletingMessageId !== null}
+          />
+          <div
+            role="alertdialog"
+            aria-labelledby="delete-message-title"
+            aria-describedby="delete-message-description"
+            className="relative w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            <h3 id="delete-message-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              {pendingDeleteMessage.scope === "all" ? "모두에게서 삭제" : "나에게만 삭제"}
+            </h3>
+            <p id="delete-message-description" className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                {formatDeletePreview(pendingDeleteMessage.message.content)}
+              </span>
+              {" "}
+              {pendingDeleteMessage.scope === "all"
+                ? "메시지를 모든 참여자에게서 삭제할까요?"
+                : "메시지를 나에게만 삭제할까요?"}
+            </p>
+            {pendingDeleteMessage.scope === "all" ? (
+              <p className="mt-1 text-xs text-zinc-500">삭제 후에는 모든 참여자 화면에서 사라집니다.</p>
+            ) : (
+              <p className="mt-1 text-xs text-zinc-500">다른 참여자에게는 계속 보입니다.</p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCancelDeleteMessage}
+                disabled={deletingMessageId !== null}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmDeleteMessage()}
+                disabled={deletingMessageId !== null}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingMessageId !== null ? "삭제 중..." : "삭제"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

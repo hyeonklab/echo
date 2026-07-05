@@ -11,12 +11,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.echo.domain.Message;
+import com.echo.domain.MessageHidden;
 import com.echo.domain.Room;
 import com.echo.domain.User;
+import com.echo.dto.MessageDeletedResponse;
 import com.echo.dto.MessageHistoryResponse;
 import com.echo.dto.MessageResponse;
 import com.echo.dto.MemberReadStateResponse;
 import com.echo.dto.SendMessageRequest;
+import com.echo.repository.MessageHiddenRepository;
 import com.echo.repository.MessageRepository;
 import com.echo.repository.RoomMemberRepository;
 import com.echo.repository.RoomRepository;
@@ -34,6 +37,7 @@ public class MessageService {
 	private static final int MAX_LIMIT = 100;
 
 	private final MessageRepository messageRepository;
+	private final MessageHiddenRepository messageHiddenRepository;
 	private final RoomRepository roomRepository;
 	private final RoomMemberRepository roomMemberRepository;
 	private final UserService userService;
@@ -50,8 +54,8 @@ public class MessageService {
 		int pageSize = normalizeLimit(limit);
 		Pageable pageable = PageRequest.of(0, pageSize + 1);
 		List<Message> messages = beforeId == null
-			? messageRepository.findByRoom_IdOrderByCreatedAtDesc(roomId, pageable)
-			: messageRepository.findByRoom_IdAndIdLessThanOrderByCreatedAtDesc(roomId, beforeId, pageable);
+			? messageRepository.findVisibleByRoom_IdOrderByCreatedAtDesc(roomId, userId, pageable)
+			: messageRepository.findVisibleByRoom_IdAndIdLessThanOrderByCreatedAtDesc(roomId, beforeId, userId, pageable);
 
 		boolean hasMore = messages.size() > pageSize;
 
@@ -91,6 +95,56 @@ public class MessageService {
 		messageBroadcastService.broadcastMessage(response);
 
 		return response;
+	}
+
+	/**
+	 * 메시지를 현재 사용자 화면에서만 숨긴다.
+	 */
+	@Transactional
+	public void hideMessageForUser(Long roomId, Long userId, Long messageId) {
+		verifyRoomMember(roomId, userId);
+
+		Message message = getMessageInRoom(roomId, messageId);
+
+		if (messageHiddenRepository.existsById_UserIdAndId_MessageId(userId, messageId)) {
+			return;
+		}
+
+		User user = userService.getUser(userId);
+		MessageHidden hidden = MessageHidden.builder()
+			.user(user)
+			.message(message)
+			.build();
+
+		messageHiddenRepository.save(Objects.requireNonNull(hidden));
+	}
+
+	/**
+	 * 메시지를 모든 참여자에게서 삭제한다.
+	 */
+	@Transactional
+	public void deleteMessageForEveryone(Long roomId, Long userId, Long messageId) {
+		verifyRoomMember(roomId, userId);
+
+		Message message = getMessageInRoom(roomId, messageId);
+
+		if (!message.getSender().getId().equals(userId)) {
+			throw new IllegalArgumentException("Only the sender can delete a message for everyone");
+		}
+
+		messageRepository.delete(message);
+		messageBroadcastService.broadcastMessageDeleted(new MessageDeletedResponse(roomId, messageId));
+	}
+
+	private Message getMessageInRoom(Long roomId, Long messageId) {
+		Message message = messageRepository.findById(Objects.requireNonNull(messageId))
+			.orElseThrow(() -> new IllegalArgumentException("Message not found"));
+
+		if (!message.getRoom().getId().equals(roomId)) {
+			throw new IllegalArgumentException("Message does not belong to this room");
+		}
+
+		return message;
 	}
 
 	private Room verifyRoomMember(Long roomId, Long userId) {

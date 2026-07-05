@@ -13,8 +13,8 @@ import {
   showMessageNotification,
 } from "@/lib/notifications";
 import { Room, fetchRooms, getRoomDisplayName } from "@/lib/rooms";
-import { publishRoomMessageEvent, publishRoomReadEvent, publishRoomUpdateEvent, toRoomFromMetaUpdate, type RoomReadEvent } from "@/lib/room-live";
-import { subscribeRoomsMessages, subscribeRoomsMeta, subscribeRoomsReads } from "@/lib/stomp";
+import { publishRoomMessageDeletedEvent, publishRoomMessageEvent, publishRoomReadEvent, publishRoomUpdateEvent, toRoomFromMetaUpdate, type RoomReadEvent } from "@/lib/room-live";
+import { subscribeRoomsMessageDeletes, subscribeRoomsMessages, subscribeRoomsMeta, subscribeRoomsReads } from "@/lib/stomp";
 import type { RoomMetaUpdate } from "@/lib/stomp";
 
 /**
@@ -135,14 +135,20 @@ export default function MessageNotificationListener() {
       publishRoomUpdateEvent(toRoomFromMetaUpdate(update));
     }
 
+    function handleIncomingDelete(deleted: { roomId: number; messageId: number }) {
+      publishRoomMessageDeletedEvent(deleted);
+    }
+
     const roomIds = rooms.map((room) => room.id);
 
     const unsubscribeMessages = subscribeRoomsMessages(roomIds, handleIncomingMessage);
+    const unsubscribeDeletes = subscribeRoomsMessageDeletes(roomIds, handleIncomingDelete);
     const unsubscribeReads = subscribeRoomsReads(roomIds, handleIncomingRead);
     const unsubscribeMeta = subscribeRoomsMeta(roomIds, handleIncomingMeta);
 
     return () => {
       unsubscribeMessages();
+      unsubscribeDeletes();
       unsubscribeReads();
       unsubscribeMeta();
     };

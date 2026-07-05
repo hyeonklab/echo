@@ -20,15 +20,71 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 
 	List<Message> findByRoom_IdAndIdLessThanOrderByCreatedAtDesc(Long roomId, Long id, Pageable pageable);
 
+	@Query("""
+		SELECT m FROM Message m
+		WHERE m.room.id = :roomId
+		AND NOT EXISTS (
+			SELECT 1 FROM MessageHidden mh
+			WHERE mh.message.id = m.id AND mh.user.id = :userId
+		)
+		ORDER BY m.createdAt DESC
+		""")
+	List<Message> findVisibleByRoom_IdOrderByCreatedAtDesc(
+		@Param("roomId") Long roomId,
+		@Param("userId") Long userId,
+		Pageable pageable
+	);
+
+	@Query("""
+		SELECT m FROM Message m
+		WHERE m.room.id = :roomId
+		AND m.id < :beforeId
+		AND NOT EXISTS (
+			SELECT 1 FROM MessageHidden mh
+			WHERE mh.message.id = m.id AND mh.user.id = :userId
+		)
+		ORDER BY m.createdAt DESC
+		""")
+	List<Message> findVisibleByRoom_IdAndIdLessThanOrderByCreatedAtDesc(
+		@Param("roomId") Long roomId,
+		@Param("beforeId") Long beforeId,
+		@Param("userId") Long userId,
+		Pageable pageable
+	);
+
 	Optional<Message> findTopByRoom_IdOrderByCreatedAtDesc(Long roomId);
 
 	@Query("""
 		SELECT m FROM Message m
+		WHERE m.room.id = :roomId
+		AND NOT EXISTS (
+			SELECT 1 FROM MessageHidden mh
+			WHERE mh.message.id = m.id AND mh.user.id = :userId
+		)
+		ORDER BY m.createdAt DESC
+		""")
+	List<Message> findVisibleByRoom_IdAndUser_IdOrderByCreatedAtDesc(
+		@Param("roomId") Long roomId,
+		@Param("userId") Long userId,
+		Pageable pageable
+	);
+
+	@Query("""
+		SELECT m FROM Message m
 		WHERE m.id IN (
-			SELECT MAX(m2.id) FROM Message m2 WHERE m2.room.id IN :roomIds GROUP BY m2.room.id
+			SELECT MAX(m2.id) FROM Message m2
+			WHERE m2.room.id IN :roomIds
+			AND NOT EXISTS (
+				SELECT 1 FROM MessageHidden mh
+				WHERE mh.message.id = m2.id AND mh.user.id = :userId
+			)
+			GROUP BY m2.room.id
 		)
 		""")
-	List<Message> findLatestMessagesByRoomIds(@Param("roomIds") Collection<Long> roomIds);
+	List<Message> findLatestVisibleMessagesByRoomIds(
+		@Param("roomIds") Collection<Long> roomIds,
+		@Param("userId") Long userId
+	);
 
 	@Query("""
 		SELECT COUNT(m) FROM Message m

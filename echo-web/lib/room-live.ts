@@ -1,8 +1,9 @@
-import type { Message } from "@/lib/messages";
+import type { Message, MessageDeletedEvent } from "@/lib/messages";
 import type { RoomMetaUpdate } from "@/lib/stomp";
 import type { LastMessagePreview, Room } from "@/lib/rooms";
 
 export const ROOM_MESSAGE_EVENT = "echo:room-message";
+export const ROOM_MESSAGE_DELETED_EVENT = "echo:room-message-deleted";
 export const ROOM_READ_EVENT = "echo:room-read";
 export const ROOM_UPDATE_EVENT = "echo:room-update";
 export const ROOMS_SNAPSHOT_EVENT = "echo:rooms-snapshot";
@@ -49,6 +50,7 @@ export function applyIncomingMessageToRooms(
   }
 
   const lastMessage: LastMessagePreview = {
+    id: message.id,
     senderId: message.senderId,
     senderDisplayName: message.senderDisplayName,
     content: message.content,
@@ -73,6 +75,26 @@ export function applyIncomingMessageToRooms(
   });
 
   return sortRoomsByLastActivity(updated);
+}
+
+/**
+ * 메시지 삭제로 채팅방 목록의 미리보기를 갱신한다.
+ */
+export function applyMessageDeletedToRooms(rooms: Room[], deleted: MessageDeletedEvent): Room[] {
+  return rooms.map((room) => {
+    if (room.id !== deleted.roomId) {
+      return room;
+    }
+
+    if (room.lastMessage?.id !== deleted.messageId) {
+      return room;
+    }
+
+    return {
+      ...room,
+      lastMessage: null,
+    };
+  });
 }
 
 /**
@@ -152,6 +174,19 @@ export function publishRoomMessageEvent(message: Message): void {
 }
 
 /**
+ * 채팅방 메시지 삭제 이벤트를 발행한다.
+ */
+export function publishRoomMessageDeletedEvent(deleted: MessageDeletedEvent): void {
+  if (globalThis.window === undefined) {
+    return;
+  }
+
+  globalThis.window.dispatchEvent(
+    new CustomEvent<MessageDeletedEvent>(ROOM_MESSAGE_DELETED_EVENT, { detail: deleted }),
+  );
+}
+
+/**
  * 채팅방 읽음 이벤트를 발행한다.
  */
 export function publishRoomReadEvent(read: RoomReadEvent): void {
@@ -202,6 +237,23 @@ export function subscribeRoomMessageEvents(handler: (message: Message) => void):
 
   return () => {
     globalThis.window.removeEventListener(ROOM_MESSAGE_EVENT, onRoomMessage);
+  };
+}
+
+/**
+ * 채팅방 메시지 삭제 이벤트를 구독한다.
+ */
+export function subscribeRoomMessageDeletedEvents(
+  handler: (deleted: MessageDeletedEvent) => void,
+): () => void {
+  function onRoomMessageDeleted(event: Event) {
+    handler((event as CustomEvent<MessageDeletedEvent>).detail);
+  }
+
+  globalThis.window.addEventListener(ROOM_MESSAGE_DELETED_EVENT, onRoomMessageDeleted);
+
+  return () => {
+    globalThis.window.removeEventListener(ROOM_MESSAGE_DELETED_EVENT, onRoomMessageDeleted);
   };
 }
 

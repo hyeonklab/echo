@@ -18,7 +18,7 @@ import {
 } from "@/lib/rooms";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
 import { addFriend, fetchFriends, resolveAddFriendErrorMessage } from "@/lib/friends";
-import { applyIncomingMessageToRooms, applyRoomReadToRooms, applyRoomUpdateToRooms, formatUnreadCount, getViewingRoomId, publishRoomsSnapshotEvent, subscribeRoomMessageEvents, subscribeRoomReadEvents, subscribeRoomUpdateEvents } from "@/lib/room-live";
+import { applyIncomingMessageToRooms, applyMessageDeletedToRooms, applyRoomReadToRooms, applyRoomUpdateToRooms, formatUnreadCount, getViewingRoomId, publishRoomsSnapshotEvent, subscribeRoomMessageDeletedEvents, subscribeRoomMessageEvents, subscribeRoomReadEvents, subscribeRoomUpdateEvents } from "@/lib/room-live";
 import { getNotificationUnavailableReason } from "@/lib/notifications";
 
 /**
@@ -101,6 +101,12 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
       );
     });
   }, [currentUser?.id, pathname]);
+
+  useEffect(() => {
+    return subscribeRoomMessageDeletedEvents((deleted) => {
+      setRooms((prev) => applyMessageDeletedToRooms(prev, deleted));
+    });
+  }, []);
 
   useEffect(() => {
     if (!currentUser) {

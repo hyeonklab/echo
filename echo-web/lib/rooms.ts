@@ -11,6 +11,7 @@ export type RoomMember = {
 };
 
 export type LastMessagePreview = {
+  id: number;
   senderId: number;
   senderDisplayName: string;
   content: string;
