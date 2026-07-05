@@ -18,7 +18,7 @@ export type LinkMatch = {
 
 const SCHEME_URL_PATTERN = /https?:\/\/[^\s<>"']+/gi;
 const BARE_DOMAIN_PATTERN =
-  /(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?:\/[^\s<>"']*)?/gi;
+  /(?:[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?\.)+[a-z]{2,}(?:\/[^\s<>"']*)?/gi;
 
 const previewCache = new Map<string, LinkPreview | null>();
 const pendingRequests = new Map<string, Promise<LinkPreview | null>>();

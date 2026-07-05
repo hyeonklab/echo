@@ -1,5 +1,7 @@
 package com.echo.dto;
 
+import org.springframework.lang.NonNull;
+
 import com.echo.domain.Room;
 
 /**
@@ -13,7 +15,8 @@ public record RoomMetaUpdateResponse(
 	/**
 	 * Room 엔티티를 메타 변경 응답 DTO로 변환한다.
 	 */
-	public static RoomMetaUpdateResponse from(Room room) {
+	@NonNull
+	public static RoomMetaUpdateResponse from(@NonNull Room room) {
 		return new RoomMetaUpdateResponse(room.getId(), room.getName());
 	}
 
