@@ -18,7 +18,7 @@ import {
 } from "@/lib/rooms";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
 import { addFriend, fetchFriends, resolveAddFriendErrorMessage } from "@/lib/friends";
-import { applyIncomingMessageToRooms, applyRoomReadToRooms, applyRoomUpdateToRooms, formatUnreadCount, getViewingRoomId, subscribeRoomMessageEvents, subscribeRoomReadEvents, subscribeRoomUpdateEvents } from "@/lib/room-live";
+import { applyIncomingMessageToRooms, applyRoomReadToRooms, applyRoomUpdateToRooms, formatUnreadCount, getViewingRoomId, publishRoomsSnapshotEvent, subscribeRoomMessageEvents, subscribeRoomReadEvents, subscribeRoomUpdateEvents } from "@/lib/room-live";
 import { getNotificationUnavailableReason } from "@/lib/notifications";
 
 /**
@@ -74,6 +74,7 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
 
       setCurrentUser(user);
       setRooms(roomList);
+      publishRoomsSnapshotEvent(roomList);
       setFriendIds(new Set(friendList.map((friend) => friend.id)));
       setLoading(false);
     }
@@ -129,7 +130,11 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
     }
 
     setGroupName("");
-    setRooms((prev) => [room, ...prev.filter((item) => item.id !== room.id)]);
+    setRooms((prev) => {
+      const next = [room, ...prev.filter((item) => item.id !== room.id)];
+      publishRoomsSnapshotEvent(next);
+      return next;
+    });
     setSubmitting(false);
   }
 
@@ -149,7 +154,11 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
       return;
     }
 
-    setRooms((prev) => [room, ...prev.filter((item) => item.id !== room.id)]);
+    setRooms((prev) => {
+      const next = [room, ...prev.filter((item) => item.id !== room.id)];
+      publishRoomsSnapshotEvent(next);
+      return next;
+    });
     setSubmitting(false);
     router.push(`/chat/${room.id}`);
   }
@@ -190,7 +199,11 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
       return;
     }
 
-    setRooms((prev) => [room, ...prev.filter((item) => item.id !== room.id)]);
+    setRooms((prev) => {
+      const next = [room, ...prev.filter((item) => item.id !== room.id)];
+      publishRoomsSnapshotEvent(next);
+      return next;
+    });
     setSubmitting(false);
     router.push(`/chat/${room.id}`);
   }
@@ -235,7 +248,11 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
       return;
     }
 
-    setRooms((prev) => prev.filter((item) => item.id !== roomId));
+    setRooms((prev) => {
+      const next = prev.filter((item) => item.id !== roomId);
+      publishRoomsSnapshotEvent(next);
+      return next;
+    });
     setSubmitting(false);
   }
 

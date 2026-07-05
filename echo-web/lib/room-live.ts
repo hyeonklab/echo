@@ -4,6 +4,7 @@ import type { LastMessagePreview, Room } from "@/lib/rooms";
 export const ROOM_MESSAGE_EVENT = "echo:room-message";
 export const ROOM_READ_EVENT = "echo:room-read";
 export const ROOM_UPDATE_EVENT = "echo:room-update";
+export const ROOMS_SNAPSHOT_EVENT = "echo:rooms-snapshot";
 
 export type RoomReadEvent = {
   roomId: number;
@@ -120,6 +121,13 @@ export function applyRoomUpdateToRooms(rooms: Room[], updatedRoom: Room): Room[]
 }
 
 /**
+ * 채팅방 목록의 총 미읽음 수를 반환한다.
+ */
+export function getTotalUnreadCount(rooms: Room[]): number {
+  return rooms.reduce((total, room) => total + (room.unreadCount ?? 0), 0);
+}
+
+/**
  * 채팅방 메시지 수신 이벤트를 발행한다.
  */
 export function publishRoomMessageEvent(message: Message): void {
@@ -155,6 +163,19 @@ export function publishRoomUpdateEvent(room: Room): void {
 
   globalThis.window.dispatchEvent(
     new CustomEvent<Room>(ROOM_UPDATE_EVENT, { detail: room }),
+  );
+}
+
+/**
+ * 채팅방 목록 스냅샷 이벤트를 발행한다.
+ */
+export function publishRoomsSnapshotEvent(rooms: Room[]): void {
+  if (globalThis.window === undefined) {
+    return;
+  }
+
+  globalThis.window.dispatchEvent(
+    new CustomEvent<Room[]>(ROOMS_SNAPSHOT_EVENT, { detail: rooms }),
   );
 }
 
@@ -200,6 +221,21 @@ export function subscribeRoomUpdateEvents(handler: (room: Room) => void): () => 
 
   return () => {
     globalThis.window.removeEventListener(ROOM_UPDATE_EVENT, onRoomUpdate);
+  };
+}
+
+/**
+ * 채팅방 목록 스냅샷 이벤트를 구독한다.
+ */
+export function subscribeRoomsSnapshotEvents(handler: (rooms: Room[]) => void): () => void {
+  function onRoomsSnapshot(event: Event) {
+    handler((event as CustomEvent<Room[]>).detail);
+  }
+
+  globalThis.window.addEventListener(ROOMS_SNAPSHOT_EVENT, onRoomsSnapshot);
+
+  return () => {
+    globalThis.window.removeEventListener(ROOMS_SNAPSHOT_EVENT, onRoomsSnapshot);
   };
 }
 
