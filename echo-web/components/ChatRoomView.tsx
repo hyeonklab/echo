@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { AuthUser, fetchSessionUser } from "@/lib/auth";
 import { Message, fetchMessages, sendMessage, type MemberReadState } from "@/lib/messages";
-import { formatUnreadCount, publishRoomReadEvent, publishRoomUpdateEvent } from "@/lib/room-live";
+import { formatUnreadCount, publishRoomReadEvent, publishRoomUpdateEvent, subscribeRoomUpdateEvents } from "@/lib/room-live";
 import { Room, canInviteToRoom, canRenameRoom, fetchRoom, formatRoomMemberSummary, getRoomDisplayName, inviteRoomMember, markRoomRead, updateRoomName } from "@/lib/rooms";
 import { subscribeRoomMessages, subscribeRoomRead } from "@/lib/stomp";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
@@ -258,6 +258,20 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
       });
     });
   }, [currentUser, loading, roomId]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    return subscribeRoomUpdateEvents((updatedRoom) => {
+      if (updatedRoom.id !== roomId) {
+        return;
+      }
+
+      setRoom((prev) => (prev ? { ...prev, ...updatedRoom } : prev));
+    });
+  }, [loading, roomId]);
 
   function focusMessageInput() {
     messageInputRef.current?.focus({ preventScroll: true });

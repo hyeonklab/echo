@@ -8,7 +8,13 @@ import type { PresenceUpdate } from "@/lib/presence";
 
 export type RoomMessageHandler = (message: Message) => void;
 export type RoomReadHandler = (read: RoomReadEvent) => void;
+export type RoomMetaHandler = (update: RoomMetaUpdate) => void;
 export type PresenceHandler = (update: PresenceUpdate) => void;
+
+export type RoomMetaUpdate = {
+  roomId: number;
+  name: string;
+};
 
 /**
  * 여러 채팅방 메시지 STOMP 구독을 시작한다.
@@ -102,6 +108,46 @@ export function subscribeRoomsReads(roomIds: number[], onRead: RoomReadHandler):
  */
 export function subscribeRoomRead(roomId: number, onRead: RoomReadHandler): () => void {
   return subscribeRoomsReads([roomId], onRead);
+}
+
+/**
+ * 여러 채팅방 메타 정보 STOMP 구독을 시작한다.
+ */
+export function subscribeRoomsMeta(roomIds: number[], onMeta: RoomMetaHandler): () => void {
+  const uniqueRoomIds = [...new Set(roomIds)];
+
+  if (uniqueRoomIds.length === 0) {
+    return () => undefined;
+  }
+
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    return () => undefined;
+  }
+
+  const client = new Client({
+    brokerURL: getWsUrl(),
+    connectHeaders: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    reconnectDelay: 5000,
+    onConnect: () => {
+      for (const roomId of uniqueRoomIds) {
+        client.subscribe(`/topic/rooms/${roomId}/meta`, (frame: IMessage) => {
+          const update = JSON.parse(frame.body) as RoomMetaUpdate;
+
+          onMeta(update);
+        });
+      }
+    },
+  });
+
+  client.activate();
+
+  return () => {
+    void client.deactivate();
+  };
 }
 
 /**

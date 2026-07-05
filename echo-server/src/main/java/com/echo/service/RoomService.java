@@ -38,6 +38,7 @@ public class RoomService {
 	private final MessageRepository messageRepository;
 	private final RoomReadStateService roomReadStateService;
 	private final UserService userService;
+	private final RoomBroadcastService roomBroadcastService;
 
 	/**
 	 * 사용자가 참여 중인 채팅방 목록을 반환한다.
@@ -196,7 +197,10 @@ public class RoomService {
 
 		room.updateName(request.name().trim());
 
-		return toRoomResponse(room, userId);
+		RoomResponse response = toRoomResponse(room, userId);
+		roomBroadcastService.broadcastRoomMetaUpdate(room);
+
+		return response;
 	}
 
 	/**

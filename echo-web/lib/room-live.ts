@@ -1,4 +1,5 @@
 import type { Message } from "@/lib/messages";
+import type { RoomMetaUpdate } from "@/lib/stomp";
 import type { LastMessagePreview, Room } from "@/lib/rooms";
 
 export const ROOM_MESSAGE_EVENT = "echo:room-message";
@@ -125,6 +126,16 @@ export function applyRoomUpdateToRooms(rooms: Room[], updatedRoom: Room): Room[]
  */
 export function getTotalUnreadCount(rooms: Room[]): number {
   return rooms.reduce((total, room) => total + (room.unreadCount ?? 0), 0);
+}
+
+/**
+ * STOMP 메타 변경을 채팅방 목록용 Room 객체로 변환한다.
+ */
+export function toRoomFromMetaUpdate(update: RoomMetaUpdate): Room {
+  return {
+    id: update.roomId,
+    name: update.name,
+  } as Room;
 }
 
 /**
