@@ -6,7 +6,7 @@ import LinkPreviewCard from "@/components/LinkPreviewCard";
 import MessageContent from "@/components/MessageContent";
 import RoomAvatar from "@/components/RoomAvatar";
 import UserAvatar from "@/components/UserAvatar";
-import { type ChangeEvent, type MouseEvent, type SubmitEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, type MouseEvent, type SubmitEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AuthUser, requireSessionUser } from "@/lib/auth";
@@ -81,6 +81,28 @@ function isAttachableImage(file: File): boolean {
     || extension === "png"
     || extension === "gif"
     || extension === "webp";
+}
+
+/**
+ * 드래그 중인 항목에 파일이 포함되어 있는지 확인한다.
+ */
+function hasImageDragPayload(dataTransfer: DataTransfer): boolean {
+  return dataTransfer.types.includes("Files")
+    || Array.from(dataTransfer.items).some((item) => item.kind === "file");
+}
+
+/**
+ * 드롭된 파일 목록을 반환한다.
+ */
+function extractDroppedImageFiles(dataTransfer: DataTransfer): File[] {
+  if (dataTransfer.files.length > 0) {
+    return Array.from(dataTransfer.files);
+  }
+
+  return Array.from(dataTransfer.items)
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null);
 }
 
 /**
@@ -201,6 +223,8 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const pendingAttachmentKeyRef = useRef(0);
+  const attachmentDragDepthRef = useRef(0);
   const lastMarkedMessageIdRef = useRef<number | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -210,6 +234,7 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [messageInput, setMessageInput] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [isAttachmentDragOver, setIsAttachmentDragOver] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const draftPreviewUrl = useMemo(() => extractFirstUrl(messageInput), [messageInput]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -624,6 +649,36 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
     }
   }
 
+  function addPendingAttachmentFiles(selectedFiles: File[]) {
+    if (selectedFiles.length === 0 || sendingMessage) {
+      return;
+    }
+
+    const remainingSlots = MAX_ATTACHMENT_COUNT - pendingAttachments.length;
+
+    if (remainingSlots <= 0) {
+      setErrorMessage(`이미지는 최대 ${MAX_ATTACHMENT_COUNT}장까지 첨부할 수 있습니다.`);
+      return;
+    }
+
+    const files = selectedFiles.slice(0, remainingSlots);
+    const invalidFiles = files.filter((file) => !isAttachableImage(file));
+
+    if (invalidFiles.length > 0) {
+      setErrorMessage("JPG, PNG, GIF, WEBP 이미지만 첨부할 수 있습니다.");
+      return;
+    }
+
+    const nextAttachments = files.map((file) => ({
+      key: `attachment-${(pendingAttachmentKeyRef.current += 1)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+
+    setPendingAttachments((prev) => [...prev, ...nextAttachments]);
+    setErrorMessage(null);
+  }
+
   function handleAttachmentSelect(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;
     const selectedFiles = input.files;
@@ -632,32 +687,49 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
       return;
     }
 
-    const remainingSlots = MAX_ATTACHMENT_COUNT - pendingAttachments.length;
-
-    if (remainingSlots <= 0) {
-      setErrorMessage(`이미지는 최대 ${MAX_ATTACHMENT_COUNT}장까지 첨부할 수 있습니다.`);
-      input.value = "";
-      return;
-    }
-
-    const files = Array.from(selectedFiles).slice(0, remainingSlots);
-    const invalidFiles = files.filter((file) => !isAttachableImage(file));
-
-    if (invalidFiles.length > 0) {
-      setErrorMessage("JPG, PNG, GIF, WEBP 이미지만 첨부할 수 있습니다.");
-      input.value = "";
-      return;
-    }
-
-    const nextAttachments = files.map((file) => ({
-      key: `${file.name}-${file.lastModified}-${file.size}`,
-      file,
-      previewUrl: URL.createObjectURL(file),
-    }));
-
-    setPendingAttachments((prev) => [...prev, ...nextAttachments]);
-    setErrorMessage(null);
+    addPendingAttachmentFiles(Array.from(selectedFiles));
     input.value = "";
+  }
+
+  function handleAttachmentDragEnter(event: DragEvent<HTMLDivElement>) {
+    if (!hasImageDragPayload(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    attachmentDragDepthRef.current += 1;
+    setIsAttachmentDragOver(true);
+  }
+
+  function handleAttachmentDragLeave(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    attachmentDragDepthRef.current -= 1;
+
+    if (attachmentDragDepthRef.current <= 0) {
+      attachmentDragDepthRef.current = 0;
+      setIsAttachmentDragOver(false);
+    }
+  }
+
+  function handleAttachmentDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!hasImageDragPayload(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleAttachmentDrop(event: DragEvent<HTMLDivElement>) {
+    if (!hasImageDragPayload(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    attachmentDragDepthRef.current = 0;
+    setIsAttachmentDragOver(false);
+
+    addPendingAttachmentFiles(extractDroppedImageFiles(event.dataTransfer));
   }
 
   function handleOpenAttachmentPicker() {
@@ -913,7 +985,20 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
         </p>
       ) : null}
 
-      <div className="mt-4 flex min-h-0 flex-1 flex-col rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50">
+      <div
+        className="relative mt-4 flex min-h-0 flex-1 flex-col rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50"
+        onDragEnter={handleAttachmentDragEnter}
+        onDragLeave={handleAttachmentDragLeave}
+        onDragOver={handleAttachmentDragOver}
+        onDrop={handleAttachmentDrop}
+      >
+        {isAttachmentDragOver ? (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-sky-400 bg-sky-500/10">
+            <p className="rounded-lg bg-white/90 px-4 py-2 text-sm font-medium text-sky-700 shadow-sm dark:bg-zinc-900/90 dark:text-sky-300">
+              사진을 놓으면 첨부됩니다
+            </p>
+          </div>
+        ) : null}
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {hasMore ? (
             <div className="flex justify-center">

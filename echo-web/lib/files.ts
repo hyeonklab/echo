@@ -162,6 +162,58 @@ export async function downloadFile(fileId: number, fileName: string): Promise<bo
 }
 
 /**
+ * 중복 파일명을 구분한다.
+ */
+function resolveUniqueFileName(fileName: string, usedNames: Map<string, number>): string {
+  const usedCount = usedNames.get(fileName) ?? 0;
+
+  usedNames.set(fileName, usedCount + 1);
+
+  if (usedCount === 0) {
+    return fileName;
+  }
+
+  const dotIndex = fileName.lastIndexOf(".");
+
+  if (dotIndex <= 0) {
+    return `${fileName} (${usedCount + 1})`;
+  }
+
+  const baseName = fileName.slice(0, dotIndex);
+  const extension = fileName.slice(dotIndex);
+
+  return `${baseName} (${usedCount + 1})${extension}`;
+}
+
+/**
+ * 여러 파일을 순차 다운로드한다.
+ */
+export async function downloadFiles(
+  files: { id: number; originalName: string }[],
+): Promise<{ successCount: number; failedCount: number }> {
+  let successCount = 0;
+  let failedCount = 0;
+  const usedNames = new Map<string, number>();
+
+  for (const file of files) {
+    const fileName = resolveUniqueFileName(file.originalName, usedNames);
+    const success = await downloadFile(file.id, fileName);
+
+    if (success) {
+      successCount += 1;
+    } else {
+      failedCount += 1;
+    }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 150);
+    });
+  }
+
+  return { successCount, failedCount };
+}
+
+/**
  * 프로필 사진을 업로드한다.
  */
 export async function uploadAvatar(file: File): Promise<AuthUser | null> {
