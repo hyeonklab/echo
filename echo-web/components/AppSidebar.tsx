@@ -13,7 +13,7 @@ type SidebarItemProps = {
 /**
  * 사이드바 아이콘 버튼.
  */
-function SidebarItem({ href, label, active, children }: SidebarItemProps) {
+function SidebarItem({ href, label, active, children }: Readonly<SidebarItemProps>) {
   return (
     <Link
       href={href}

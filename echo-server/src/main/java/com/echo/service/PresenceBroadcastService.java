@@ -1,5 +1,6 @@
 package com.echo.service;
 
+import org.springframework.lang.NonNull;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -21,7 +22,7 @@ public class PresenceBroadcastService {
 	/**
 	 * 온라인 상태 변경을 전체 구독자에게 전송한다.
 	 */
-	public void broadcastPresence(PresenceUpdateResponse update) {
+	public void broadcastPresence(@NonNull PresenceUpdateResponse update) {
 		messagingTemplate.convertAndSend(PRESENCE_TOPIC, update);
 	}
 

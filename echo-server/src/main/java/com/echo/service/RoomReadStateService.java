@@ -143,7 +143,7 @@ public class RoomReadStateService {
 
 	private java.util.Optional<Long> getLastReadMessageId(Long roomId, Long userId) {
 		return roomReadStateRepository.findById_RoomIdAndId_UserId(roomId, userId)
-			.map(RoomReadState::getLastReadMessageId);
+			.map(readState -> readState.getLastReadMessageId());
 	}
 
 	private void verifyRoomMember(Long roomId, Long userId) {

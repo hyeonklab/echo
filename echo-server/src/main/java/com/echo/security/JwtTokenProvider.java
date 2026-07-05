@@ -4,6 +4,8 @@ import java.time.Instant;
 
 import javax.crypto.SecretKey;
 
+import org.springframework.lang.NonNull;
+
 import com.echo.domain.User;
 
 import io.jsonwebtoken.Claims;
@@ -60,6 +62,7 @@ public class JwtTokenProvider {
 	/**
 	 * 토큰에서 사용자 ID를 추출한다.
 	 */
+	@NonNull
 	public Long getUserId(String token) {
 		return Long.parseLong(parseClaims(token).getSubject());
 	}

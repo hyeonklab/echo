@@ -50,7 +50,9 @@ public class RoomService {
 			return List.of();
 		}
 
-		List<Long> roomIds = rooms.stream().map(Room::getId).toList();
+		List<Long> roomIds = rooms.stream()
+			.map(room -> Objects.requireNonNull(room).getId())
+			.toList();
 		Map<Long, Message> lastMessagesByRoomId = messageRepository.findLatestMessagesByRoomIds(roomIds).stream()
 			.collect(Collectors.toMap(message -> message.getRoom().getId(), message -> message));
 		Map<Long, Integer> unreadCountsByRoomId = roomReadStateService.countUnreadByRoomIds(userId, roomIds);
@@ -238,11 +240,12 @@ public class RoomService {
 	}
 
 	private RoomResponse toRoomResponse(Room room, Long viewerUserId) {
-		return toRoomResponse(room, viewerUserId, findLastMessage(room.getId()), roomReadStateService.countUnread(room.getId(), viewerUserId));
-	}
-
-	private RoomResponse toRoomResponse(Room room, Long viewerUserId, Message lastMessage) {
-		return toRoomResponse(room, viewerUserId, lastMessage, roomReadStateService.countUnread(room.getId(), viewerUserId));
+		return toRoomResponse(
+			room,
+			viewerUserId,
+			findLastMessage(room.getId()),
+			roomReadStateService.countUnread(room.getId(), viewerUserId)
+		);
 	}
 
 	private RoomResponse toRoomResponse(Room room, Long viewerUserId, Message lastMessage, int unreadCount) {

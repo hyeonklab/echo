@@ -1,5 +1,6 @@
 package com.echo.websocket;
 
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -67,7 +68,7 @@ public class JwtStompChannelInterceptor implements ChannelInterceptor {
 			throw new IllegalArgumentException("Invalid access token");
 		}
 
-		Long userId = jwtTokenProvider.getUserId(token);
+		Long userId = Objects.requireNonNull(jwtTokenProvider.getUserId(token));
 		User user = userRepository.findById(userId)
 			.orElseThrow(() -> new IllegalArgumentException("User not found"));
 

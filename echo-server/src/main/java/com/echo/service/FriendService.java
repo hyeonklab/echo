@@ -69,7 +69,7 @@ public class FriendService {
 		Friend friend = friendRepository.findByOwnerIdAndFriendId(ownerUserId, friendUserId)
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Friend not found"));
 
-		friendRepository.delete(friend);
+		friendRepository.delete(Objects.requireNonNull(friend));
 	}
 
 }
