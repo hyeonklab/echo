@@ -4,7 +4,7 @@ export const ACCESS_TOKEN_KEY = "accessToken";
 export const REFRESH_TOKEN_KEY = "refreshToken";
 
 /** Naver OAuth 클라이언트 설정 완료 시 true로 변경한다. */
-export const IS_NAVER_LOGIN_ENABLED = false;
+export const IS_NAVER_LOGIN_ENABLED = true;
 
 export type AuthUser = {
   id: number;
