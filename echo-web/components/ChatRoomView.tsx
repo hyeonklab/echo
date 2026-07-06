@@ -20,8 +20,8 @@ import {
   sendMessage,
   type MemberReadState,
 } from "@/lib/messages";
-import { formatUnreadCount, publishRoomMessageDeletedEvent, publishRoomReadEvent, publishRoomUpdateEvent, subscribeRoomUpdateEvents } from "@/lib/room-live";
-import { Room, canInviteToRoom, canRenameRoom, fetchRoom, formatRoomMemberSummary, getRoomDisplayName, getRoomMember, inviteRoomMember, markRoomRead, updateRoomName } from "@/lib/rooms";
+import { formatUnreadCount, publishRoomMessageDeletedEvent, publishRoomReadEvent, publishRoomUpdateEvent, publishRoomLeftEvent, subscribeRoomUpdateEvents } from "@/lib/room-live";
+import { Room, canInviteToRoom, canRenameRoom, deleteRoom, fetchRoom, formatRoomMemberSummary, getLeaveRoomConfirmText, getLeaveRoomLabel, getRoomDisplayName, getRoomMember, inviteRoomMember, markRoomRead, updateRoomName } from "@/lib/rooms";
 import { subscribeRoomMessageDeletes, subscribeRoomMessages, subscribeRoomRead } from "@/lib/stomp";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
 
@@ -255,6 +255,8 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
     message: Message;
     scope: MessageDeleteScope;
   } | null>(null);
+  const [pendingLeaveRoom, setPendingLeaveRoom] = useState(false);
+  const [leavingRoom, setLeavingRoom] = useState(false);
   const [deletingMessageId, setDeletingMessageId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -616,6 +618,41 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
     setPendingDeleteMessage(null);
   }
 
+  function handleRequestLeaveRoom() {
+    setPendingLeaveRoom(true);
+    setErrorMessage(null);
+  }
+
+  function handleCancelLeaveRoom() {
+    if (leavingRoom) {
+      return;
+    }
+
+    setPendingLeaveRoom(false);
+  }
+
+  async function handleConfirmLeaveRoom() {
+    if (!room) {
+      return;
+    }
+
+    setLeavingRoom(true);
+    setErrorMessage(null);
+    setPendingLeaveRoom(false);
+
+    const success = await deleteRoom(roomId);
+
+    setLeavingRoom(false);
+
+    if (!success) {
+      setErrorMessage("채팅방 나가기에 실패했습니다.");
+      return;
+    }
+
+    publishRoomLeftEvent(roomId);
+    router.push("/chat");
+  }
+
   async function handleConfirmDeleteMessage() {
     if (!pendingDeleteMessage) {
       return;
@@ -839,6 +876,13 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
     );
   }
 
+  const leaveRoomLabel = getLeaveRoomLabel(room, currentUser.id);
+  const leaveRoomConfirm = getLeaveRoomConfirmText(
+    room,
+    currentUser.id,
+    getRoomDisplayName(room, currentUser.id),
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-start gap-2 border-b border-zinc-200 px-3 py-3 md:gap-3 md:px-4 md:pb-4 dark:border-zinc-700">
@@ -922,6 +966,14 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
                   {isInviting ? "초대 닫기" : "멤버 초대"}
                 </button>
               ) : null}
+              <button
+                type="button"
+                onClick={handleRequestLeaveRoom}
+                disabled={leavingRoom}
+                className="shrink-0 rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/40"
+              >
+                {leaveRoomLabel}
+              </button>
             </div>
           )}
 
@@ -1240,6 +1292,50 @@ export default function ChatRoomView({ roomId }: Readonly<ChatRoomViewProps>) {
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
               >
                 {deletingMessageId !== null ? "삭제 중..." : "삭제"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingLeaveRoom ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="나가기 확인 닫기"
+            className="absolute inset-0 bg-black/50"
+            onClick={handleCancelLeaveRoom}
+            disabled={leavingRoom}
+          />
+          <div
+            role="alertdialog"
+            aria-labelledby="leave-room-title"
+            aria-describedby="leave-room-description"
+            className="relative w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            <h3 id="leave-room-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              {leaveRoomConfirm.title}
+            </h3>
+            <p id="leave-room-description" className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+              {leaveRoomConfirm.description}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">{leaveRoomConfirm.hint}</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCancelLeaveRoom}
+                disabled={leavingRoom}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmLeaveRoom()}
+                disabled={leavingRoom}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {leavingRoom ? "처리 중..." : leaveRoomConfirm.title}
               </button>
             </div>
           </div>

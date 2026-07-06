@@ -403,6 +403,60 @@ export async function markRoomRead(roomId: number, messageId: number): Promise<b
 }
 
 /**
+ * 채팅방 나가기/삭제 버튼 문구를 반환한다.
+ */
+export function getLeaveRoomLabel(room: Room, currentUserId: number): string {
+  if (room.type === "GROUP") {
+    return room.createdByUserId === currentUserId ? "방 삭제" : "방 나가기";
+  }
+
+  if (room.type === "SELF") {
+    return "대화방 삭제";
+  }
+
+  return "채팅방 나가기";
+}
+
+/**
+ * 채팅방 나가기 확인 문구를 반환한다.
+ */
+export function getLeaveRoomConfirmText(
+  room: Room,
+  currentUserId: number,
+  displayName: string,
+): { title: string; description: string; hint: string } {
+  if (room.type === "GROUP" && room.createdByUserId === currentUserId) {
+    return {
+      title: "방 삭제",
+      description: `${displayName} 채팅방을 삭제하시겠습니까?`,
+      hint: "삭제하면 모든 참여자에게서 채팅방이 사라집니다.",
+    };
+  }
+
+  if (room.type === "GROUP") {
+    return {
+      title: "방 나가기",
+      description: `${displayName} 채팅방에서 나가시겠습니까?`,
+      hint: "나가면 목록에서 채팅방이 제거됩니다.",
+    };
+  }
+
+  if (room.type === "SELF") {
+    return {
+      title: "대화방 삭제",
+      description: "나와의 대화방을 삭제하시겠습니까?",
+      hint: "삭제 후에는 목록에서 제거됩니다.",
+    };
+  }
+
+  return {
+    title: "채팅방 나가기",
+    description: `${displayName} 채팅방에서 나가시겠습니까?`,
+    hint: "나가면 목록에서 채팅방이 제거됩니다.",
+  };
+}
+
+/**
  * 채팅방을 삭제하거나 참여를 종료한다.
  */
 export async function deleteRoom(roomId: number): Promise<boolean> {

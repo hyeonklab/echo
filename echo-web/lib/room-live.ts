@@ -7,6 +7,7 @@ export const ROOM_MESSAGE_DELETED_EVENT = "echo:room-message-deleted";
 export const ROOM_READ_EVENT = "echo:room-read";
 export const ROOM_UPDATE_EVENT = "echo:room-update";
 export const ROOMS_SNAPSHOT_EVENT = "echo:rooms-snapshot";
+export const ROOM_LEFT_EVENT = "echo:room-left";
 
 export type RoomReadEvent = {
   roomId: number;
@@ -220,9 +221,26 @@ export function publishRoomsSnapshotEvent(rooms: Room[]): void {
     return;
   }
 
-  globalThis.window.dispatchEvent(
-    new CustomEvent<Room[]>(ROOMS_SNAPSHOT_EVENT, { detail: rooms }),
-  );
+  queueMicrotask(() => {
+    globalThis.window.dispatchEvent(
+      new CustomEvent<Room[]>(ROOMS_SNAPSHOT_EVENT, { detail: rooms }),
+    );
+  });
+}
+
+/**
+ * 채팅방 나가기 이벤트를 발행한다.
+ */
+export function publishRoomLeftEvent(roomId: number): void {
+  if (globalThis.window === undefined) {
+    return;
+  }
+
+  queueMicrotask(() => {
+    globalThis.window.dispatchEvent(
+      new CustomEvent<number>(ROOM_LEFT_EVENT, { detail: roomId }),
+    );
+  });
 }
 
 /**
@@ -299,6 +317,21 @@ export function subscribeRoomsSnapshotEvents(handler: (rooms: Room[]) => void): 
 
   return () => {
     globalThis.window.removeEventListener(ROOMS_SNAPSHOT_EVENT, onRoomsSnapshot);
+  };
+}
+
+/**
+ * 채팅방 나가기 이벤트를 구독한다.
+ */
+export function subscribeRoomLeftEvents(handler: (roomId: number) => void): () => void {
+  function onRoomLeft(event: Event) {
+    handler((event as CustomEvent<number>).detail);
+  }
+
+  globalThis.window.addEventListener(ROOM_LEFT_EVENT, onRoomLeft);
+
+  return () => {
+    globalThis.window.removeEventListener(ROOM_LEFT_EVENT, onRoomLeft);
   };
 }
 

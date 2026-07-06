@@ -12,6 +12,7 @@ import {
   getViewingRoomId,
   subscribeRoomMessageEvents,
   subscribeRoomReadEvents,
+  subscribeRoomLeftEvents,
   subscribeRoomsSnapshotEvents,
 } from "@/lib/room-live";
 
@@ -66,7 +67,17 @@ export function useChatUnreadCount(): number {
 
   useEffect(() => {
     return subscribeRoomsSnapshotEvents((snapshot) => {
-      setRooms(snapshot);
+      queueMicrotask(() => {
+        setRooms(snapshot);
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    return subscribeRoomLeftEvents((roomId) => {
+      queueMicrotask(() => {
+        setRooms((prev) => prev.filter((room) => room.id !== roomId));
+      });
     });
   }, []);
 

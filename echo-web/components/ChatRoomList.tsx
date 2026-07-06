@@ -16,10 +16,12 @@ import {
   formatLastMessageTime,
   formatRoomMemberSummary,
   getRoomDisplayName,
+  getLeaveRoomLabel,
+  getLeaveRoomConfirmText,
 } from "@/lib/rooms";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
 import { addFriend, fetchFriends, resolveAddFriendErrorMessage } from "@/lib/friends";
-import { applyIncomingMessageToRooms, applyMessageDeletedToRooms, applyRoomReadToRooms, applyRoomUpdateToRooms, formatUnreadCount, getViewingRoomId, publishRoomsSnapshotEvent, subscribeRoomMessageDeletedEvents, subscribeRoomMessageEvents, subscribeRoomReadEvents, subscribeRoomUpdateEvents, subscribeRoomsSnapshotEvents } from "@/lib/room-live";
+import { applyIncomingMessageToRooms, applyMessageDeletedToRooms, applyRoomReadToRooms, applyRoomUpdateToRooms, formatUnreadCount, getViewingRoomId, publishRoomLeftEvent, publishRoomsSnapshotEvent, subscribeRoomMessageDeletedEvents, subscribeRoomMessageEvents, subscribeRoomLeftEvents, subscribeRoomReadEvents, subscribeRoomUpdateEvents, subscribeRoomsSnapshotEvents } from "@/lib/room-live";
 import { getNotificationUnavailableReason } from "@/lib/notifications";
 
 /**
@@ -92,7 +94,22 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
 
   useEffect(() => {
     return subscribeRoomsSnapshotEvents((snapshot) => {
-      setRooms(snapshot);
+      queueMicrotask(() => {
+        setRooms(snapshot);
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    return subscribeRoomLeftEvents((roomId) => {
+      queueMicrotask(() => {
+        setRooms((prev) => {
+          const next = prev.filter((room) => room.id !== roomId);
+          publishRoomsSnapshotEvent(next);
+
+          return next;
+        });
+      });
     });
   }, []);
 
@@ -273,7 +290,12 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
       publishRoomsSnapshotEvent(next);
       return next;
     });
+    publishRoomLeftEvent(roomId);
     setSubmitting(false);
+
+    if (activeRoomId === roomId) {
+      router.push("/chat");
+    }
   }
 
   function openDeleteConfirm(room: Room) {
@@ -404,7 +426,7 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
                       disabled={submitting}
                       className="pointer-events-auto rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
                     >
-                      삭제
+                      {currentUser ? getLeaveRoomLabel(room, currentUser.id) : "삭제"}
                     </button>
                   </div>
                 </div>
@@ -549,15 +571,41 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
             className="relative w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
           >
             <h3 id="delete-room-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              채팅방 삭제
+              {currentUser && pendingDeleteRoom
+                ? getLeaveRoomConfirmText(
+                    pendingDeleteRoom,
+                    currentUser.id,
+                    getRoomDisplayName(pendingDeleteRoom, currentUser.id),
+                  ).title
+                : "채팅방 삭제"}
             </h3>
             <p id="delete-room-description" className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                {currentUser ? getRoomDisplayName(pendingDeleteRoom, currentUser.id) : pendingDeleteRoom.name}
-              </span>
-              {" "}채팅방을 삭제하시겠습니까?
+              {currentUser && pendingDeleteRoom ? (
+                <>
+                  {getLeaveRoomConfirmText(
+                    pendingDeleteRoom,
+                    currentUser.id,
+                    getRoomDisplayName(pendingDeleteRoom, currentUser.id),
+                  ).description}
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {pendingDeleteRoom?.name}
+                  </span>
+                  {" "}채팅방을 삭제하시겠습니까?
+                </>
+              )}
             </p>
-            <p className="mt-1 text-xs text-zinc-500">삭제 후에는 목록에서 제거됩니다.</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              {currentUser && pendingDeleteRoom
+                ? getLeaveRoomConfirmText(
+                    pendingDeleteRoom,
+                    currentUser.id,
+                    getRoomDisplayName(pendingDeleteRoom, currentUser.id),
+                  ).hint
+                : "삭제 후에는 목록에서 제거됩니다."}
+            </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"

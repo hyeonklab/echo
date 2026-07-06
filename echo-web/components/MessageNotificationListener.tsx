@@ -20,6 +20,7 @@ import {
   publishRoomsSnapshotEvent,
   publishRoomUpdateEvent,
   subscribeRoomsSnapshotEvents,
+  subscribeRoomLeftEvents,
   toRoomFromMetaUpdate,
   type RoomReadEvent,
 } from "@/lib/room-live";
@@ -124,7 +125,17 @@ export default function MessageNotificationListener() {
 
   useEffect(() => {
     return subscribeRoomsSnapshotEvents((snapshot) => {
-      setRooms(snapshot);
+      queueMicrotask(() => {
+        setRooms(snapshot);
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    return subscribeRoomLeftEvents((roomId) => {
+      queueMicrotask(() => {
+        setRooms((prev) => prev.filter((room) => room.id !== roomId));
+      });
     });
   }, []);
 
