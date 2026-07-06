@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import jwt from "jsonwebtoken";
 
+import { SCREENSHOT_DEMO_EMAIL } from "./screenshot-demo-data.mjs";
+
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptsDir, "../..");
 
@@ -38,12 +40,13 @@ export function loadEnvFile(envPath) {
 }
 
 /**
- * 로컬 PostgreSQL에서 스크린샷용 사용자 1명을 조회한다.
+ * 로컬 PostgreSQL에서 스크린샷용 더미 사용자를 조회한다.
  */
 export function fetchScreenshotUser(env) {
   const dbUser = env.ECHO_DB_USER ?? "echo";
   const dbName = env.ECHO_DB_NAME ?? "echo";
-  const sql = "SELECT id, COALESCE(email, ''), display_name FROM users ORDER BY id LIMIT 1;";
+  const demoEmail = process.env.SCREENSHOT_DEMO_EMAIL ?? SCREENSHOT_DEMO_EMAIL;
+  const sql = `SELECT id, COALESCE(email, ''), display_name FROM users WHERE email = '${demoEmail}' LIMIT 1;`;
 
   try {
     const output = execSync(
@@ -140,7 +143,9 @@ export function resolveScreenshotAuth() {
   const user = fetchScreenshotUser(env);
 
   if (!user) {
-    throw new Error("DB에서 사용자를 찾지 못했습니다. docker compose와 로그인 계정을 확인해 주세요.");
+    throw new Error(
+      "스크린샷 더미 사용자를 찾지 못했습니다. `npm run screenshots:seed`를 먼저 실행해 주세요.",
+    );
   }
 
   const baseUrl = resolveScreenshotBaseUrl(env);

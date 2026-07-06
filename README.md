@@ -16,12 +16,24 @@
 | :---: | :---: |
 | ![친구](docs/screenshots/friends.png) | ![채팅 목록](docs/screenshots/chat-list.png) |
 
-| 링크 미리보기 (방 27) | 사진 미리보기 (방 32) |
+| 링크 미리보기 | 사진 미리보기 |
 | :---: | :---: |
 | ![채팅방 링크](docs/screenshots/chat-room-link-preview.png) | ![채팅방 사진](docs/screenshots/chat-room-image-preview.png) |
 
-> 스크린샷 재생성: `echo-server`·`echo-web` 실행 후 `cd echo-web && npm run screenshots`  
-> (최초 1회 `npm run screenshots:install` 필요, DB에 로그인한 사용자 1명 이상 필요)
+| 그룹 채팅 | 여친 DM |
+| :---: | :---: |
+| ![그룹 채팅](docs/screenshots/chat-room-group.png) | ![수아](docs/screenshots/chat-room-girlfriend.png) |
+
+| 교수님 DM | 밴드동아리 |
+| :---: | :---: |
+| ![교수님](docs/screenshots/chat-room-professor.png) | ![밴드동아리](docs/screenshots/chat-room-club.png) |
+
+| 가족 단톡 |
+| :---: |
+| ![우리집](docs/screenshots/chat-room-family.png) |
+
+> 스크린샷 재생성: `echo-server`·`echo-web`·PostgreSQL 실행 후 `cd echo-web && npm run screenshots`  
+> (최초 1회 `npm run screenshots:install` 필요. 더미 계정·대화는 `screenshots:seed`로 자동 생성됩니다.)
 
 ---
 
@@ -312,7 +324,7 @@ npm run dev
 
 ### 4. README 스크린샷 (선택)
 
-백엔드·프론트·PostgreSQL이 실행 중이고, DB에 로그인한 사용자가 있어야 합니다.
+백엔드·프론트·PostgreSQL이 실행 중이어야 합니다. 더미 계정(`screenshot-demo@echo-screenshot.local`)과 예시 대화가 자동으로 시드됩니다.
 
 ```bash
 cd echo-web
@@ -320,7 +332,7 @@ npm run screenshots:install   # 최초 1회
 npm run screenshots
 ```
 
-`docs/screenshots/*.png` (다크 모드)가 생성됩니다. JWT는 Echo 루트 `.env`의 `JWT_SECRET`으로 로컬 DB 사용자에 대해 발급합니다.
+`docs/screenshots/*.png` (다크 모드)가 생성됩니다. JWT는 Echo 루트 `.env`의 `JWT_SECRET`으로 더미 사용자에 대해 발급합니다.
 
 ---
 

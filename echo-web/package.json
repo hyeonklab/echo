@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "screenshots": "node scripts/capture-readme-screenshots.mjs",
+    "screenshots:seed": "node scripts/seed-screenshot-demo.mjs",
+    "screenshots": "node scripts/seed-screenshot-demo.mjs && node scripts/capture-readme-screenshots.mjs",
     "screenshots:install": "playwright install chromium"
   },
   "dependencies": {
