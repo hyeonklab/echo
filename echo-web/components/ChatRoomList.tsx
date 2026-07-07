@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { type SubmitEvent, useEffect, useState } from "react";
+import { type MouseEvent, type SubmitEvent, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { AuthUser, requireSessionUser } from "@/lib/auth";
 import RoomAvatar from "@/components/RoomAvatar";
 import {
   Room,
+  canRenameRoom,
   createDmRoom,
   createGroupRoom,
   deleteRoom,
@@ -20,11 +21,19 @@ import {
   getLeaveRoomConfirmText,
   requiresDmLeaveScopeChoice,
   resolveRoomDeleteScope,
+  updateRoomName,
   type RoomDeleteScope,
 } from "@/lib/rooms";
 import { SearchUser, getProviderLabel, searchUsers } from "@/lib/users";
-import { addFriend, fetchFriends, resolveAddFriendErrorMessage } from "@/lib/friends";
-import { applyIncomingMessageToRooms, applyMessageDeletedToRooms, applyRoomMembershipToRooms, applyRoomReadToRooms, applyRoomUpdateToRooms, formatUnreadCount, getViewingRoomId, publishRoomLeftEvent, publishRoomsSnapshotEvent, subscribeRoomMessageDeletedEvents, subscribeRoomMessageEvents, subscribeRoomLeftEvents, subscribeRoomReadEvents, subscribeRoomUpdateEvents, subscribeRoomsSnapshotEvents } from "@/lib/room-live";
+import {
+  Friend,
+  addFriend,
+  fetchFriends,
+  resolveAddFriendErrorMessage,
+  resolveUpdateFriendNicknameErrorMessage,
+  updateFriendNickname,
+} from "@/lib/friends";
+import { applyIncomingMessageToRooms, applyMessageDeletedToRooms, applyRoomMembershipToRooms, applyRoomReadToRooms, applyRoomUpdateToRooms, formatUnreadCount, getViewingRoomId, publishRoomLeftEvent, publishRoomUpdateEvent, publishRoomsSnapshotEvent, subscribeRoomMessageDeletedEvents, subscribeRoomMessageEvents, subscribeRoomLeftEvents, subscribeRoomReadEvents, subscribeRoomUpdateEvents, subscribeRoomsSnapshotEvents } from "@/lib/room-live";
 import { subscribeUserRoomDeleted, subscribeUserRoomMembership } from "@/lib/stomp";
 import { getNotificationUnavailableReason } from "@/lib/notifications";
 
@@ -42,6 +51,40 @@ function resolveDmErrorMessage(errorMessage: string | null): string {
 
   return errorMessage;
 }
+
+/**
+ * 채팅방 이름 변경 API 오류 메시지를 사용자 메시지로 변환한다.
+ */
+function resolveRenameErrorMessage(errorMessage: string | null): string {
+  if (!errorMessage) {
+    return "채팅방 이름 변경에 실패했습니다.";
+  }
+
+  if (errorMessage.includes("Cannot rename a DM room")) {
+    return "1:1 DM 채팅방은 이름을 변경할 수 없습니다.";
+  }
+
+  return errorMessage;
+}
+
+/**
+ * DM 상대 사용자 ID를 반환한다.
+ */
+function getDmPeerUserId(room: Room, currentUserId: number): number | null {
+  if (room.type !== "DM") {
+    return null;
+  }
+
+  const peer = room.members.find((member) => member.userId !== currentUserId);
+
+  return peer?.userId ?? null;
+}
+
+type RoomContextMenuState = {
+  x: number;
+  y: number;
+  room: Room;
+};
 
 /**
  * 채팅방 목록 및 생성 UI.
@@ -69,6 +112,14 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
     scope?: RoomDeleteScope;
   } | null>(null);
   const [friendIds, setFriendIds] = useState<Set<number>>(new Set());
+  const [friendsById, setFriendsById] = useState<Map<number, Friend>>(new Map());
+  const [roomContextMenu, setRoomContextMenu] = useState<RoomContextMenuState | null>(null);
+  const [pendingRoomRename, setPendingRoomRename] = useState<Room | null>(null);
+  const [roomRenameInput, setRoomRenameInput] = useState("");
+  const [roomRenameErrorMessage, setRoomRenameErrorMessage] = useState<string | null>(null);
+  const [pendingNicknameFriend, setPendingNicknameFriend] = useState<Friend | null>(null);
+  const [nicknameInput, setNicknameInput] = useState("");
+  const [nicknameErrorMessage, setNicknameErrorMessage] = useState<string | null>(null);
   const notificationGuide = getNotificationUnavailableReason();
 
   useEffect(() => {
@@ -91,6 +142,7 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
         setCurrentUser(user);
         setRooms(roomList);
         publishRoomsSnapshotEvent(roomList);
+        setFriendsById(new Map(friendList.map((friend) => [friend.id, friend])));
         setFriendIds(new Set(friendList.map((friend) => friend.id)));
       } finally {
         setLoading(false);
@@ -99,6 +151,32 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
 
     void loadRooms();
   }, [router]);
+
+  useEffect(() => {
+    if (!roomContextMenu) {
+      return;
+    }
+
+    function closeContextMenu() {
+      setRoomContextMenu(null);
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeContextMenu();
+      }
+    }
+
+    window.addEventListener("click", closeContextMenu);
+    window.addEventListener("scroll", closeContextMenu, true);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("click", closeContextMenu);
+      window.removeEventListener("scroll", closeContextMenu, true);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [roomContextMenu]);
 
   useEffect(() => {
     return subscribeRoomsSnapshotEvents((snapshot) => {
@@ -302,6 +380,7 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
     }
 
     setFriendIds((prev) => new Set([...prev, friend.id]));
+    setFriendsById((prev) => new Map(prev).set(friend.id, friend));
     setSubmitting(false);
   }
 
@@ -364,6 +443,117 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
     setPendingLeaveRoom({ ...pendingLeaveRoom, step: "confirm", scope });
   }
 
+  function handleRoomContextMenu(event: MouseEvent, room: Room) {
+    event.preventDefault();
+    event.stopPropagation();
+    setRoomContextMenu({ x: event.clientX, y: event.clientY, room });
+  }
+
+  function openRoomRenameModal(room: Room) {
+    setRoomContextMenu(null);
+    setRoomRenameErrorMessage(null);
+    setRoomRenameInput(room.name);
+    setPendingRoomRename(room);
+  }
+
+  function openFriendNicknameModal(room: Room) {
+    if (!currentUser) {
+      return;
+    }
+
+    const peerUserId = getDmPeerUserId(room, currentUser.id);
+
+    if (peerUserId == null) {
+      return;
+    }
+
+    const friend = friendsById.get(peerUserId);
+
+    if (!friend) {
+      return;
+    }
+
+    setRoomContextMenu(null);
+    setPendingNicknameFriend(friend);
+    setNicknameInput(friend.nickname ?? "");
+    setNicknameErrorMessage(null);
+  }
+
+  async function handleConfirmRoomRename(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!pendingRoomRename) {
+      return;
+    }
+
+    const trimmed = roomRenameInput.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    if (trimmed === pendingRoomRename.name) {
+      setPendingRoomRename(null);
+      setRoomRenameInput("");
+      return;
+    }
+
+    setSubmitting(true);
+    setRoomRenameErrorMessage(null);
+
+    const { room: updatedRoom, errorMessage: apiError } = await updateRoomName(pendingRoomRename.id, trimmed);
+
+    if (!updatedRoom) {
+      setRoomRenameErrorMessage(resolveRenameErrorMessage(apiError));
+      setSubmitting(false);
+      return;
+    }
+
+    setRooms((prev) => applyRoomUpdateToRooms(prev, updatedRoom));
+    publishRoomUpdateEvent(updatedRoom);
+    setPendingRoomRename(null);
+    setRoomRenameInput("");
+    setSubmitting(false);
+  }
+
+  async function handleConfirmFriendNickname() {
+    if (!pendingNicknameFriend) {
+      return;
+    }
+
+    setSubmitting(true);
+    setNicknameErrorMessage(null);
+
+    const { friend, errorMessage: apiError } = await updateFriendNickname(
+      pendingNicknameFriend.id,
+      nicknameInput,
+    );
+
+    if (!friend) {
+      setNicknameErrorMessage(resolveUpdateFriendNicknameErrorMessage(apiError));
+      setSubmitting(false);
+      return;
+    }
+
+    setFriendsById((prev) => new Map(prev).set(friend.id, friend));
+
+    const refreshedRooms = await fetchRooms();
+
+    if (refreshedRooms) {
+      setRooms(refreshedRooms);
+      publishRoomsSnapshotEvent(refreshedRooms);
+    }
+
+    setPendingNicknameFriend(null);
+    setNicknameInput("");
+    setSubmitting(false);
+  }
+
+  function handleLeaveRoomFromMenu(room: Room) {
+    setRoomContextMenu(null);
+    openDeleteConfirm(room);
+  }
+
   if (loading) {
     return <p className="p-4 text-sm text-zinc-500">채팅방 목록 불러오는 중...</p>;
   }
@@ -390,7 +580,7 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
 
             if (isPanel) {
               return (
-                <li key={room.id}>
+                <li key={room.id} onContextMenu={(event) => handleRoomContextMenu(event, room)}>
                   <Link
                     href={`/chat/${room.id}`}
                     className={`block rounded-lg px-3 py-2 transition ${
@@ -438,6 +628,7 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
               <li
                 key={room.id}
                 className="relative rounded-xl border border-zinc-200 bg-zinc-50 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:bg-zinc-800"
+                onContextMenu={(event) => handleRoomContextMenu(event, room)}
               >
                 <Link
                   href={`/chat/${room.id}`}
@@ -618,9 +809,187 @@ export default function ChatRoomList({ mode = "page", activeRoomId = null }: Cha
   const leaveRoomDisplayName = pendingLeaveRoom && currentUser
     ? getRoomDisplayName(pendingLeaveRoom.room, currentUser.id)
     : "";
+  const contextMenuRoom = roomContextMenu?.room ?? null;
+  const contextMenuPeerUserId =
+    contextMenuRoom && currentUser ? getDmPeerUserId(contextMenuRoom, currentUser.id) : null;
+  const contextMenuFriend =
+    contextMenuPeerUserId != null ? friendsById.get(contextMenuPeerUserId) : undefined;
 
   return (
     <div className={isPanel ? "flex h-full flex-col overflow-hidden" : "space-y-8"}>
+      {roomContextMenu && contextMenuRoom && currentUser ? (
+        <div
+          className="fixed z-50 min-w-[180px] overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-600 dark:bg-zinc-900"
+          style={{ left: roomContextMenu.x, top: roomContextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          {canRenameRoom(contextMenuRoom.type) ? (
+            <button
+              type="button"
+              onClick={() => openRoomRenameModal(contextMenuRoom)}
+              className="block w-full px-3 py-2 text-left text-sm text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              채팅방 이름 변경
+            </button>
+          ) : null}
+          {contextMenuRoom.type === "DM" && contextMenuFriend ? (
+            <button
+              type="button"
+              onClick={() => openFriendNicknameModal(contextMenuRoom)}
+              className="block w-full px-3 py-2 text-left text-sm text-zinc-700 transition hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              친구 이름 변경
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => handleLeaveRoomFromMenu(contextMenuRoom)}
+            disabled={submitting}
+            className="block w-full px-3 py-2 text-left text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40"
+          >
+            {getLeaveRoomLabel(contextMenuRoom, currentUser.id)}
+          </button>
+        </div>
+      ) : null}
+
+      {pendingRoomRename ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="채팅방 이름 변경 닫기"
+            className="absolute inset-0 bg-black/50"
+            onClick={() => {
+              if (submitting) {
+                return;
+              }
+
+              setPendingRoomRename(null);
+              setRoomRenameInput("");
+              setRoomRenameErrorMessage(null);
+            }}
+            disabled={submitting}
+          />
+          <form
+            role="dialog"
+            aria-labelledby="room-rename-title"
+            className="relative w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+            onSubmit={(event) => void handleConfirmRoomRename(event)}
+          >
+            <h3 id="room-rename-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              채팅방 이름 변경
+            </h3>
+            <input
+              type="text"
+              value={roomRenameInput}
+              onChange={(event) => {
+                setRoomRenameInput(event.target.value);
+                setRoomRenameErrorMessage(null);
+              }}
+              placeholder="채팅방 이름"
+              maxLength={255}
+              className="mt-3 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+              disabled={submitting}
+              autoFocus
+            />
+            {roomRenameErrorMessage ? (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{roomRenameErrorMessage}</p>
+            ) : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingRoomRename(null);
+                  setRoomRenameInput("");
+                  setRoomRenameErrorMessage(null);
+                }}
+                disabled={submitting}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 dark:border-zinc-600 dark:text-zinc-200"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || !roomRenameInput.trim()}
+                className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+              >
+                {submitting ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {pendingNicknameFriend ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="친구 이름 변경 닫기"
+            className="absolute inset-0 bg-black/50"
+            onClick={() => {
+              if (submitting) {
+                return;
+              }
+
+              setPendingNicknameFriend(null);
+              setNicknameInput("");
+              setNicknameErrorMessage(null);
+            }}
+            disabled={submitting}
+          />
+          <div
+            role="dialog"
+            aria-labelledby="friend-nickname-title"
+            className="relative w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+          >
+            <h3 id="friend-nickname-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              친구 이름 변경
+            </h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              원래 이름: {pendingNicknameFriend.displayName}
+            </p>
+            <input
+              type="text"
+              value={nicknameInput}
+              onChange={(event) => {
+                setNicknameInput(event.target.value);
+                setNicknameErrorMessage(null);
+              }}
+              placeholder="비우면 원래 이름으로 표시"
+              maxLength={255}
+              className="mt-3 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+              disabled={submitting}
+              autoFocus
+            />
+            {nicknameErrorMessage ? (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{nicknameErrorMessage}</p>
+            ) : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingNicknameFriend(null);
+                  setNicknameInput("");
+                  setNicknameErrorMessage(null);
+                }}
+                disabled={submitting}
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 dark:border-zinc-600 dark:text-zinc-200"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmFriendNickname()}
+                disabled={submitting}
+                className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+              >
+                {submitting ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {pendingLeaveRoom?.step === "dm-choice" ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button
