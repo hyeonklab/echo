@@ -10,6 +10,7 @@
     "lint:fix": "eslint --fix",
     "screenshots:seed": "node scripts/seed-screenshot-demo.mjs",
     "screenshots": "node scripts/seed-screenshot-demo.mjs && node scripts/capture-readme-screenshots.mjs",
+    "screenshots:login": "node scripts/capture-readme-screenshots.mjs login",
     "screenshots:install": "playwright install chromium"
   },
   "dependencies": {

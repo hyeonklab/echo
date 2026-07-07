@@ -43,7 +43,7 @@ export default function LoginPanel({ errorCode = null }: Readonly<LoginPanelProp
       <div className="space-y-3">
         <a
           href={getOAuthLoginUrl("google")}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#1A73E8] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#1765CC]"
         >
           Google로 계속하기
         </a>

@@ -265,6 +265,16 @@ async function captureScreenshot(browser, baseUrl, target, accessToken, refreshT
 }
 
 async function main() {
+  const filterNames = new Set(process.argv.slice(2));
+
+  function matchesFilter(name) {
+    if (filterNames.size === 0) {
+      return true;
+    }
+
+    return filterNames.has(name);
+  }
+
   const { accessToken, refreshToken, apiUrl, baseUrl } = resolveScreenshotAuth();
 
   fs.mkdirSync(outputDir, { recursive: true });
@@ -275,16 +285,28 @@ async function main() {
 
   try {
     for (const target of screenshots) {
+      if (!matchesFilter(target.name)) {
+        continue;
+      }
+
       const outputPath = await captureScreenshot(browser, baseUrl, target, accessToken, refreshToken);
       console.log(`saved ${outputPath}`);
     }
 
     for (const target of themeScreenshots) {
+      if (!matchesFilter(target.name)) {
+        continue;
+      }
+
       const outputPath = await captureScreenshot(browser, baseUrl, target, accessToken, refreshToken);
       console.log(`saved ${outputPath} (theme=${target.theme})`);
     }
 
     for (const roomTarget of chatRoomScreenshots) {
+      if (!matchesFilter(roomTarget.name)) {
+        continue;
+      }
+
       const roomId = await resolveDemoRoomId(
         apiUrl,
         accessToken,
